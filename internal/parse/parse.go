@@ -60,7 +60,7 @@ func decodeInteger(bencodedString string, start int) (decoded int, end int, err 
 }
 
 func decodeList(bencodedString string, start int) (decoded []interface{}, end int, err error) {
-	var list []interface{}
+	list := make([]interface{}, 0)
 
 	for i := start + 1; bencodedString[i] != 'e'; {
 		var element interface{}
