@@ -15,7 +15,7 @@ func main() {
 	if command == "decode" {
 		bencodedValue := os.Args[2]
 
-		decoded, err := parse.DecodeBencode(bencodedValue)
+		decoded, _, err := parse.DecodeBencode(bencodedValue, 0)
 		if err != nil {
 			fmt.Println(err)
 			return
