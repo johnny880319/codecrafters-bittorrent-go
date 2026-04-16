@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha1"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -40,8 +41,37 @@ func main() {
 
 		fmt.Println("Tracker URL: " + decoded.(map[string]interface{})["announce"].(string))
 		fmt.Println("Length: " + strconv.Itoa(decoded.(map[string]interface{})["info"].(map[string]interface{})["length"].(int)))
+		// Calculate the SHA-1 hash of this bencoded dictionary
+		infoHash, err := calculateInfoHash(file_bytes)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		fmt.Println("Info Hash: " + infoHash)
 	} else {
 		fmt.Println("Unknown command: " + command)
 		os.Exit(1)
 	}
+}
+
+func calculateInfoHash(file_bytes []byte) (string, error) {
+	var infoDictStart int
+
+	for i := 0; i < len(file_bytes); i++ {
+		if string(file_bytes[i:i+6]) == "4:info" {
+			infoDictStart = i + 6
+			break
+		}
+	}
+	if infoDictStart == 0 {
+		return "", fmt.Errorf("Info dictionary not found")
+	}
+
+	_, infoDictLen, err := parse.DecodeBencode(string(file_bytes[infoDictStart:]), 0)
+	if err != nil {
+		fmt.Println(err)
+		return "", err
+	}
+
+	return fmt.Sprintf("%x", sha1.Sum(file_bytes[infoDictStart:infoDictStart+infoDictLen])), nil
 }
