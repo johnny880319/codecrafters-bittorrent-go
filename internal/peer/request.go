@@ -17,7 +17,7 @@ func SendTrackerRequest(trackerURL string, infoHash []byte) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println(string(infoHash))
+
 	q := u.Query()
 	q.Set("info_hash", string(infoHash))
 	q.Set("peer_id", "PEERID12345678901234")
