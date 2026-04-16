@@ -18,6 +18,8 @@ func DecodeBencode(bencodedString string, start int) (decoded interface{}, end i
 		return decodeInteger(bencodedString, start)
 	case bencodedString[start] == 'l':
 		return decodeList(bencodedString, start)
+	case bencodedString[start] == 'd':
+		return decodeDict(bencodedString, start)
 	default:
 		return "", start, fmt.Errorf("Only strings and integers are supported at the moment")
 	}
@@ -73,4 +75,27 @@ func decodeList(bencodedString string, start int) (decoded []interface{}, end in
 	}
 
 	return list, i + 1, nil
+}
+
+func decodeDict(bencodedString string, start int) (decoded map[string]interface{}, end int, err error) {
+	dict := make(map[string]interface{})
+	i := start + 1
+
+	for bencodedString[i] != 'e' {
+		var key string
+		key, i, err = decodeString(bencodedString, i)
+		if err != nil {
+			return nil, start, err
+		}
+
+		var value interface{}
+		value, i, err = DecodeBencode(bencodedString, i)
+		if err != nil {
+			return nil, start, err
+		}
+
+		dict[key] = value
+	}
+
+	return dict, i + 1, nil
 }
