@@ -7,7 +7,7 @@ import (
 	// bencode "github.com/jackpal/bencode-go" // Available if you need it!
 )
 
-// Example:
+// DecodeBencode Example:
 // - 5:hello -> hello
 // - 10:hello12345 -> hello12345
 func DecodeBencode(bencodedString string, start int) (decoded interface{}, end int, err error) {
@@ -21,7 +21,7 @@ func DecodeBencode(bencodedString string, start int) (decoded interface{}, end i
 	case bencodedString[start] == 'd':
 		return decodeDict(bencodedString, start)
 	default:
-		return "", start, fmt.Errorf("Only strings and integers are supported at the moment")
+		return "", start, fmt.Errorf("only strings and integers are supported at the moment")
 	}
 }
 
