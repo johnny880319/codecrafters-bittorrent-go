@@ -41,13 +41,21 @@ func main() {
 
 		fmt.Println("Tracker URL: " + decoded.(map[string]interface{})["announce"].(string))
 		fmt.Println("Length: " + strconv.Itoa(decoded.(map[string]interface{})["info"].(map[string]interface{})["length"].(int)))
-		// Calculate the SHA-1 hash of this bencoded dictionary
+
 		infoHash, err := calculateInfoHash(file_bytes)
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
 		fmt.Println("Info Hash: " + infoHash)
+
+		fmt.Println("Piece Length: " + strconv.Itoa(decoded.(map[string]interface{})["info"].(map[string]interface{})["piece length"].(int)))
+
+		fmt.Println("Piece Hashes:")
+		for i := 0; i < len(decoded.(map[string]interface{})["info"].(map[string]interface{})["pieces"].(string)); i += 20 {
+			fmt.Printf("%x\n", decoded.(map[string]interface{})["info"].(map[string]interface{})["pieces"].(string)[i:i+20])
+		}
+
 	} else {
 		fmt.Println("Unknown command: " + command)
 		os.Exit(1)
