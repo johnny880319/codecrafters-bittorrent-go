@@ -86,8 +86,9 @@ func main() {
 			fmt.Println(err)
 			return
 		}
+		pieceLength := decoded.(map[string]interface{})["info"].(map[string]interface{})["piece length"].(int)
 
-		err = peer.SendTrackerRequest(trackerURL, infoHash)
+		err = peer.SendTrackerRequest(trackerURL, infoHash, pieceLength)
 		if err != nil {
 			fmt.Println(err)
 			return

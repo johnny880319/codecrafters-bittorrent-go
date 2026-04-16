@@ -12,7 +12,7 @@ import (
 )
 
 // SendTrackerRequest sends a request to the tracker and prints the list of peers.
-func SendTrackerRequest(trackerURL string, infoHash []byte) error {
+func SendTrackerRequest(trackerURL string, infoHash []byte, left int) error {
 	u, err := url.Parse(trackerURL)
 	if err != nil {
 		return err
@@ -24,7 +24,7 @@ func SendTrackerRequest(trackerURL string, infoHash []byte) error {
 	q.Set("port", "6881")
 	q.Set("uploaded", "0")
 	q.Set("downloaded", "0")
-	q.Set("left", "0")
+	q.Set("left", fmt.Sprintf("%d", left))
 	q.Set("compact", "1")
 	u.RawQuery = q.Encode()
 
