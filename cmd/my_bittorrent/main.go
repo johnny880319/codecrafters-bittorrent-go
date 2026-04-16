@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+
+	"github.com/codecrafters-io/bittorrent-starter-go/internal/parse"
 	// bencode "github.com/jackpal/bencode-go" // Available if you need it!
 )
 
@@ -13,7 +15,7 @@ func main() {
 	if command == "decode" {
 		bencodedValue := os.Args[2]
 
-		decoded, err := decodeBencode(bencodedValue)
+		decoded, err := parse.DecodeBencode(bencodedValue)
 		if err != nil {
 			fmt.Println(err)
 			return

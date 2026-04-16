@@ -1,4 +1,4 @@
-package main
+package parse
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 // Example:
 // - 5:hello -> hello
 // - 10:hello12345 -> hello12345
-func decodeBencode(bencodedString string) (interface{}, error) {
+func DecodeBencode(bencodedString string) (interface{}, error) {
 	i := 0
 
 	if unicode.IsDigit(rune(bencodedString[i])) {

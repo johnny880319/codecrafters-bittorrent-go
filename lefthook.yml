@@ -1,0 +1,17 @@
+pre-commit:
+  parallel: true
+  commands:
+    # go
+    go-lint-typecheck:
+      glob: "**/*.go"
+      run: golangci-lint run --fix
+      stage_fixed: true
+
+pre-push:
+  parallel: true
+  commands:
+    # go
+    go-test:
+      glob: "**/*.go"
+      run: go test -short ./...
+
