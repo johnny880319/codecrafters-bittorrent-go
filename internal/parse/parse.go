@@ -61,8 +61,9 @@ func decodeInteger(bencodedString string, start int) (decoded int, end int, err 
 
 func decodeList(bencodedString string, start int) (decoded []interface{}, end int, err error) {
 	list := make([]interface{}, 0)
+	i := start + 1
 
-	for i := start + 1; bencodedString[i] != 'e'; {
+	for bencodedString[i] != 'e' {
 		var element interface{}
 		element, i, err = DecodeBencode(bencodedString, i)
 		if err != nil {
@@ -71,5 +72,5 @@ func decodeList(bencodedString string, start int) (decoded []interface{}, end in
 		list = append(list, element)
 	}
 
-	return list, start + 1, nil
+	return list, i + 1, nil
 }
