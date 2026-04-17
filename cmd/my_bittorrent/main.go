@@ -66,10 +66,14 @@ func main() {
 			return
 		}
 
-		err = peer.SendTrackerRequest(torrentInfo.TrackerURL, torrentInfo.InfoHash, torrentInfo.PieceLength)
+		peers, err := peer.SendTrackerRequest(torrentInfo)
 		if err != nil {
 			fmt.Println(err)
 			return
+		}
+		fmt.Println("Peers:")
+		for _, p := range peers {
+			fmt.Println(p)
 		}
 
 	default:
