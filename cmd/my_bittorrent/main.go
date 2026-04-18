@@ -11,6 +11,7 @@ import (
 	// bencode "github.com/jackpal/bencode-go" // Available if you need it!
 )
 
+//nolint:gocognit // Will be refactored in the future.
 func main() {
 	command := os.Args[1]
 
@@ -75,6 +76,30 @@ func main() {
 		for _, p := range peers {
 			fmt.Println(p)
 		}
+
+	case "handshake":
+		file_name := os.Args[2]
+		//nolint:gosec // This is a command-line tool. We trust the user to provide a valid file path.
+		file_bytes, err := os.ReadFile(file_name)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		torrentInfo, err := peer.GetInfo(file_bytes)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		peerIP := os.Args[3]
+
+		peerID, err := peer.PerformHandshake(peerIP, torrentInfo)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		fmt.Printf("Peer ID: %x\n", peerID)
 
 	default:
 		fmt.Println("Unknown command: " + command)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"time"
@@ -72,4 +73,49 @@ func parsePeers(body []byte) ([]string, error) {
 		peerList = append(peerList, fmt.Sprintf("%d.%d.%d.%d:%d", ip[0], ip[1], ip[2], ip[3], int(port[0])*256+int(port[1])))
 	}
 	return peerList, nil
+}
+
+// PerformHandshake performs the BitTorrent handshake with the given peer and returns the peer ID from the response.
+func PerformHandshake(peerIP string, torrentInfo *TorrentInfo) (string, error) {
+	peerID := "PEERID12345678901234"
+
+	content := make([]byte, 0, 68)
+	content = append(content, byte(19))
+	content = append(content, []byte("BitTorrent protocol")...)
+	content = append(content, make([]byte, 8)...) // Reserved bytes
+	content = append(content, torrentInfo.InfoHash...)
+	content = append(content, []byte(peerID)...)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	dialer := &net.Dialer{}
+	conn, err := dialer.DialContext(ctx, "tcp", peerIP)
+	if err != nil {
+		return "", err
+	}
+	defer func() {
+		err = conn.Close()
+	}()
+	if err != nil {
+		return "", err
+	}
+
+	err = conn.SetDeadline(time.Now().Add(10 * time.Second))
+	if err != nil {
+		return "", err
+	}
+
+	_, err = conn.Write(content)
+	if err != nil {
+		return "", err
+	}
+
+	response := make([]byte, 68)
+	_, err = io.ReadFull(conn, response)
+	if err != nil {
+		return "", err
+	}
+
+	return string(response[48:68]), nil
 }
