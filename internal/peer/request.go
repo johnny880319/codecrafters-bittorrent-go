@@ -172,8 +172,8 @@ func SetupPeerConnection(conn net.Conn) error {
 
 // DownloadPiece breaks the piece into blocks of 16 kiB and download.
 func DownloadPiece(conn net.Conn, torrentInfo *TorrentInfo, pieceIndex int) ([]byte, error) {
-	piece := make([]byte, 0, torrentInfo.PieceLength)
 	pieceLength := min(torrentInfo.PieceLength, torrentInfo.Length-pieceIndex*torrentInfo.PieceLength)
+	piece := make([]byte, pieceLength)
 	for blockIndex := 0; blockIndex*16*1024 < pieceLength; blockIndex++ {
 		// Break the piece into blocks of 16 kiB (16 * 1024 bytes) and send a request message for each block
 		blockBegin := blockIndex * 16 * 1024
@@ -199,7 +199,7 @@ func DownloadPiece(conn net.Conn, torrentInfo *TorrentInfo, pieceIndex int) ([]b
 			return nil, fmt.Errorf("expected piece message, got message ID %d", messageID)
 		}
 
-		messageBegin := int(piecePayload[4])<<24 | int(piecePayload[5])<<16 | int(piecePayload[6])<<8 | int(piecePayload[7])
+		messageBegin := int(binary.BigEndian.Uint32(piecePayload[4:8]))
 		copy(piece[messageBegin:messageBegin+blockLength], piecePayload[8:8+blockLength])
 	}
 	// Verify that the SHA-1 hash of the piece matches the expected hash from the torrent file.
@@ -212,26 +212,28 @@ func DownloadPiece(conn net.Conn, torrentInfo *TorrentInfo, pieceIndex int) ([]b
 	return piece, nil
 }
 
-func readPeerMessage(conn net.Conn) (int, []byte, error) {
-	lengthBuf := make([]byte, 4)
-	_, err := io.ReadFull(conn, lengthBuf)
-	if err != nil {
-		return 0, nil, err
-	}
+func readPeerMessage(conn net.Conn) (byte, []byte, error) {
+	for {
+		lengthBuf := make([]byte, 4)
+		_, err := io.ReadFull(conn, lengthBuf)
+		if err != nil {
+			return 0, nil, err
+		}
 
-	length := int(lengthBuf[0])<<24 | int(lengthBuf[1])<<16 | int(lengthBuf[2])<<8 | int(lengthBuf[3])
-	if length == 0 {
-		return 0, nil, nil
-	}
+		length := int(binary.BigEndian.Uint32(lengthBuf))
+		if length == 0 {
+			continue // Keep-alive message, read the next message
+		}
 
-	payload := make([]byte, length)
-	_, err = io.ReadFull(conn, payload)
-	if err != nil {
-		return 0, nil, err
-	}
+		payload := make([]byte, length)
+		_, err = io.ReadFull(conn, payload)
+		if err != nil {
+			return 0, nil, err
+		}
 
-	messageID := payload[0]
-	return int(messageID), payload[1:], nil
+		messageID := payload[0]
+		return messageID, payload[1:], nil
+	}
 }
 
 func sendPeerMessage(conn net.Conn, messageID byte, payload []byte) error {
