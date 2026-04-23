@@ -26,6 +26,8 @@ func main() {
 		cmdHandshake()
 	case "download_piece":
 		cmdDownloadPiece()
+	case "download":
+		cmdDownload()
 	default:
 		fmt.Println("Unknown command: " + command)
 		os.Exit(1)
@@ -181,6 +183,69 @@ func cmdDownloadPiece() {
 	// Save the downloaded piece to the output path
 	//nolint:gosec // This is a command-line tool. We trust the user to provide a valid file path.
 	err = os.WriteFile(outputPath, piece, 0o644)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+}
+
+func cmdDownload() {
+	if os.Args[2] != "-o" {
+		fmt.Println("Usage: download_piece -o <output_path>")
+		os.Exit(1)
+	}
+	outputPath := os.Args[3]
+	fileName := os.Args[4]
+
+	// Read the torrent file to get the tracker URL
+	//nolint:gosec // CLI tool, file path is user-provided argument
+	fileBytes, err := os.ReadFile(fileName)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	torrentInfo, err := peer.GetInfo(fileBytes)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	// Perform the tracker GET request to get a list of peers
+	peers, err := peer.SendTrackerRequest(torrentInfo)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	// Establish a TCP connection with a peer, and perform a handshake
+	conn, _, err := peer.OpenConnection(peers[0], torrentInfo)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer func() {
+		_ = conn.Close()
+	}()
+
+	err = peer.SetupPeerConnection(conn)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var pieces []byte
+	for pieceIndexInt := 0; pieceIndexInt*torrentInfo.PieceLength < torrentInfo.Length; pieceIndexInt++ {
+		piece, err := peer.DownloadPiece(conn, torrentInfo, pieceIndexInt)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		pieces = append(pieces, piece...)
+	}
+
+	// Save the downloaded piece to the output path
+	//nolint:gosec // This is a command-line tool. We trust the user to provide a valid file path.
+	err = os.WriteFile(outputPath, pieces, 0o644)
 	if err != nil {
 		fmt.Println(err)
 		return
