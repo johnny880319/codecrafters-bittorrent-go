@@ -22,7 +22,7 @@ func DecodeBencode(bencodedString string, start int) (decoded interface{}, end i
 	case bencodedString[start] == 'd':
 		return decodeDict(bencodedString, start)
 	default:
-		return "", start, fmt.Errorf("only strings and integers are supported at the moment")
+		return "", start, fmt.Errorf("unsupported bencode type at position %d: %q", start, bencodedString[start])
 	}
 }
 

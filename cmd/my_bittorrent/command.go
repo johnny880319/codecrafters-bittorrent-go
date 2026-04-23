@@ -14,6 +14,10 @@ import (
 )
 
 func cmdDecode() {
+	if len(os.Args) < 3 {
+		fmt.Fprintln(os.Stderr, "Usage: decode <bencoded_value>")
+		os.Exit(1)
+	}
 	bencodedValue := os.Args[2]
 	decoded, _, err := bencode.DecodeBencode(bencodedValue, 0)
 	die(err)
@@ -23,6 +27,10 @@ func cmdDecode() {
 }
 
 func cmdInfo() {
+	if len(os.Args) < 3 {
+		fmt.Fprintln(os.Stderr, "Usage: info <torrent_file>")
+		os.Exit(1)
+	}
 	filePath := os.Args[2]
 	metaInfo, err := loadTorrent(filePath)
 	die(err)
@@ -38,6 +46,10 @@ func cmdInfo() {
 }
 
 func cmdPeers() {
+	if len(os.Args) < 3 {
+		fmt.Fprintln(os.Stderr, "Usage: peers <torrent_file>")
+		os.Exit(1)
+	}
 	filePath := os.Args[2]
 	metaInfo, err := loadTorrent(filePath)
 	die(err)
@@ -54,6 +66,10 @@ func cmdPeers() {
 }
 
 func cmdHandshake() {
+	if len(os.Args) < 4 {
+		fmt.Fprintln(os.Stderr, "Usage: handshake <torrent_file> <peer_ip>")
+		os.Exit(1)
+	}
 	filePath := os.Args[2]
 	peerIP := os.Args[3]
 	metaInfo, err := loadTorrent(filePath)
@@ -69,8 +85,8 @@ func cmdHandshake() {
 }
 
 func cmdDownloadPiece() {
-	if os.Args[2] != "-o" {
-		fmt.Println("Usage: download_piece -o <output_path>")
+	if len(os.Args) < 6 || os.Args[2] != "-o" {
+		fmt.Fprintln(os.Stderr, "Usage: download_piece -o <output_path> <torrent_file> <piece_index>")
 		os.Exit(1)
 	}
 	outputPath := os.Args[3]
@@ -101,8 +117,8 @@ func cmdDownloadPiece() {
 }
 
 func cmdDownload() {
-	if os.Args[2] != "-o" {
-		fmt.Fprintln(os.Stderr, "Usage: download_piece -o <output_path>")
+	if len(os.Args) < 5 || os.Args[2] != "-o" {
+		fmt.Fprintln(os.Stderr, "Usage: download -o <output_path> <torrent_file>")
 		os.Exit(1)
 	}
 	outputPath := os.Args[3]
