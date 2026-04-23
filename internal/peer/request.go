@@ -16,22 +16,23 @@ import (
 	"time"
 
 	"github.com/codecrafters-io/bittorrent-starter-go/internal/bencode"
+	"github.com/codecrafters-io/bittorrent-starter-go/internal/metainfo"
 )
 
 // SendTrackerRequest sends a request to the tracker and prints the list of peers.
-func SendTrackerRequest(torrentInfo *TorrentInfo) ([]string, error) {
-	u, err := url.Parse(torrentInfo.TrackerURL)
+func SendTrackerRequest(metaInfo *metainfo.MetaInfo) ([]string, error) {
+	u, err := url.Parse(metaInfo.TrackerURL)
 	if err != nil {
 		return nil, err
 	}
 
 	q := u.Query()
-	q.Set("info_hash", string(torrentInfo.InfoHash))
+	q.Set("info_hash", string(metaInfo.InfoHash))
 	q.Set("peer_id", "PEERID12345678901234")
 	q.Set("port", "6881")
 	q.Set("uploaded", "0")
 	q.Set("downloaded", "0")
-	q.Set("left", fmt.Sprintf("%d", torrentInfo.Length))
+	q.Set("left", fmt.Sprintf("%d", metaInfo.Length))
 	q.Set("compact", "1")
 	u.RawQuery = q.Encode()
 
@@ -82,14 +83,14 @@ func parsePeers(body []byte) ([]string, error) {
 }
 
 // OpenConnection opens a TCP connection to the given peer IP and performs the BitTorrent handshake.
-func OpenConnection(peerIP string, torrentInfo *TorrentInfo) (net.Conn, string, error) {
+func OpenConnection(peerIP string, metaInfo *metainfo.MetaInfo) (net.Conn, string, error) {
 	peerID := "PEERID12345678901234"
 
 	content := make([]byte, 0, 68)
 	content = append(content, byte(19))
 	content = append(content, []byte("BitTorrent protocol")...)
 	content = append(content, make([]byte, 8)...) // Reserved bytes
-	content = append(content, torrentInfo.InfoHash...)
+	content = append(content, metaInfo.InfoHash...)
 	content = append(content, []byte(peerID)...)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -171,8 +172,8 @@ func SetupPeerConnection(conn net.Conn) error {
 }
 
 // DownloadPiece breaks the piece into blocks of 16 kiB and download.
-func DownloadPiece(conn net.Conn, torrentInfo *TorrentInfo, pieceIndex int) ([]byte, error) {
-	pieceLength := min(torrentInfo.PieceLength, torrentInfo.Length-pieceIndex*torrentInfo.PieceLength)
+func DownloadPiece(conn net.Conn, metaInfo *metainfo.MetaInfo, pieceIndex int) ([]byte, error) {
+	pieceLength := min(metaInfo.PieceLength, metaInfo.Length-pieceIndex*metaInfo.PieceLength)
 	piece := make([]byte, pieceLength)
 	for blockIndex := 0; blockIndex*16*1024 < pieceLength; blockIndex++ {
 		// Break the piece into blocks of 16 kiB (16 * 1024 bytes) and send a request message for each block
@@ -205,7 +206,7 @@ func DownloadPiece(conn net.Conn, torrentInfo *TorrentInfo, pieceIndex int) ([]b
 	// Verify that the SHA-1 hash of the piece matches the expected hash from the torrent file.
 	//nolint:gosec // BitTorrent uses SHA-1 for info hashes.
 	actual := sha1.Sum(piece)
-	expect := []byte(torrentInfo.PieceHashes[pieceIndex])
+	expect := []byte(metaInfo.PieceHashes[pieceIndex])
 	if !bytes.Equal(actual[:], expect) {
 		return nil, fmt.Errorf("piece %d failed hash verification", pieceIndex)
 	}

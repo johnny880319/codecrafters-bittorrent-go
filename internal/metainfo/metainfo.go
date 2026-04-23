@@ -1,5 +1,5 @@
-// Package peer provides functions to extract information from torrent files and interact with peers.
-package peer
+// Package metainfo provides functions to extract information from torrent files.
+package metainfo
 
 import (
 	//nolint:gosec // BitTorrent uses SHA-1 for info hashes.
@@ -9,8 +9,8 @@ import (
 	"github.com/codecrafters-io/bittorrent-starter-go/internal/bencode"
 )
 
-// TorrentInfo holds the information extracted from a torrent file.
-type TorrentInfo struct {
+// MetaInfo holds the information extracted from a torrent file.
+type MetaInfo struct {
 	TrackerURL  string
 	Length      int
 	InfoHash    []byte
@@ -19,7 +19,7 @@ type TorrentInfo struct {
 }
 
 // GetInfo extracts the torrent information from the given torrent file bytes.
-func GetInfo(fileBytes []byte) (*TorrentInfo, error) {
+func GetInfo(fileBytes []byte) (*MetaInfo, error) {
 	decoded, _, err := bencode.DecodeBencode(string(fileBytes), 0)
 	if err != nil {
 		return nil, err
@@ -42,7 +42,7 @@ func GetInfo(fileBytes []byte) (*TorrentInfo, error) {
 		pieceHashes = append(pieceHashes, pieceList[i:i+20])
 	}
 
-	return &TorrentInfo{
+	return &MetaInfo{
 		TrackerURL:  trackerURL,
 		Length:      length,
 		InfoHash:    infoHash,
