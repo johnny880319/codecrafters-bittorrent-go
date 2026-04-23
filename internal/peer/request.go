@@ -1,7 +1,13 @@
+// Package peer provides functions to extract information from torrent files and interact with peers.
 package peer
 
 import (
+	"bytes"
 	"context"
+
+	//nolint:gosec // BitTorrent uses SHA-1 for info hashes.
+	"crypto/sha1"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"net"
@@ -9,7 +15,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/codecrafters-io/bittorrent-starter-go/internal/parse"
+	"github.com/codecrafters-io/bittorrent-starter-go/internal/bencode"
 )
 
 // SendTrackerRequest sends a request to the tracker and prints the list of peers.
@@ -56,7 +62,7 @@ func SendTrackerRequest(torrentInfo *TorrentInfo) ([]string, error) {
 }
 
 func parsePeers(body []byte) ([]string, error) {
-	content, _, err := parse.DecodeBencode(string(body), 0)
+	content, _, err := bencode.DecodeBencode(string(body), 0)
 	if err != nil {
 		return nil, err
 	}
@@ -75,8 +81,8 @@ func parsePeers(body []byte) ([]string, error) {
 	return peerList, nil
 }
 
-// PerformHandshake performs the BitTorrent handshake with the given peer and returns the peer ID from the response.
-func PerformHandshake(peerIP string, torrentInfo *TorrentInfo) (string, error) {
+// OpenConnection opens a TCP connection to the given peer IP and performs the BitTorrent handshake.
+func OpenConnection(peerIP string, torrentInfo *TorrentInfo) (net.Conn, string, error) {
 	peerID := "PEERID12345678901234"
 
 	content := make([]byte, 0, 68)
@@ -92,30 +98,150 @@ func PerformHandshake(peerIP string, torrentInfo *TorrentInfo) (string, error) {
 	dialer := &net.Dialer{}
 	conn, err := dialer.DialContext(ctx, "tcp", peerIP)
 	if err != nil {
-		return "", err
+		return nil, "", err
 	}
 	defer func() {
-		err = conn.Close()
+		if err != nil {
+			_ = conn.Close()
+		}
 	}()
-	if err != nil {
-		return "", err
-	}
 
-	err = conn.SetDeadline(time.Now().Add(10 * time.Second))
+	err = conn.SetDeadline(time.Now().Add(60 * time.Second))
 	if err != nil {
-		return "", err
+		return nil, "", err
 	}
 
 	_, err = conn.Write(content)
 	if err != nil {
-		return "", err
+		return nil, "", err
 	}
 
 	response := make([]byte, 68)
 	_, err = io.ReadFull(conn, response)
 	if err != nil {
-		return "", err
+		return nil, "", err
 	}
 
-	return string(response[48:68]), nil
+	return conn, string(response[48:68]), nil
+}
+
+// ExchangePeerMessages performs the message exchange with the peer to download the pieces of the file.
+// func ExchangePeerMessages(conn net.Conn, torrentInfo *TorrentInfo) ([]byte, error) {
+// 	if err := SetupPeerConnection(conn); err != nil {
+// 		return nil, err
+// 	}
+
+// 	pieces := make([]byte, 0, torrentInfo.Length)
+// 	for pieceIndex := 0; pieceIndex*torrentInfo.PieceLength < torrentInfo.Length; pieceIndex++ {
+// 		piece, err := DownloadPiece(conn, torrentInfo, pieceIndex)
+// 		if err != nil {
+// 			return nil, err
+// 		}
+// 		pieces = append(pieces, piece...)
+// 	}
+// 	return pieces, nil
+// }
+
+// SetupPeerConnection initiates the peer connection.
+func SetupPeerConnection(conn net.Conn) error {
+	// Wait for a bitfield message from the peer indicating which pieces it has
+	messageID, _, err := readPeerMessage(conn)
+	if err != nil {
+		return err
+	}
+	if messageID != 5 { // Bitfield message ID is 5
+		return fmt.Errorf("expected bitfield message, got message ID %d", messageID)
+	}
+
+	// Send an interested message
+	err = sendPeerMessage(conn, 2, nil) // Interested message ID is 2
+	if err != nil {
+		return err
+	}
+
+	// Wait until you receive an unchoke message back
+	messageID, _, err = readPeerMessage(conn)
+	if err != nil {
+		return err
+	}
+	if messageID != 1 { // Unchoke message ID is 1
+		return fmt.Errorf("expected unchoke message, got message ID %d", messageID)
+	}
+	return nil
+}
+
+// DownloadPiece breaks the piece into blocks of 16 kiB and download.
+func DownloadPiece(conn net.Conn, torrentInfo *TorrentInfo, pieceIndex int) ([]byte, error) {
+	piece := make([]byte, 0, torrentInfo.PieceLength)
+	pieceLength := min(torrentInfo.PieceLength, torrentInfo.Length-pieceIndex*torrentInfo.PieceLength)
+	for blockIndex := 0; blockIndex*16*1024 < pieceLength; blockIndex++ {
+		// Break the piece into blocks of 16 kiB (16 * 1024 bytes) and send a request message for each block
+		blockBegin := blockIndex * 16 * 1024
+		blockLength := min(16*1024, pieceLength-blockBegin)
+		payload := make([]byte, 12)
+		//nolint:gosec // BitTorrent protocol defines piece index, block begin, and block length as uint32.
+		binary.BigEndian.PutUint32(payload[0:4], uint32(pieceIndex))
+		binary.BigEndian.PutUint32(payload[4:8], uint32(blockBegin))
+		//nolint:gosec // BitTorrent protocol defines block length as uint32.
+		binary.BigEndian.PutUint32(payload[8:12], uint32(blockLength))
+
+		err := sendPeerMessage(conn, 6, payload) // Request message ID is 6
+		if err != nil {
+			return nil, err
+		}
+
+		// Wait for a piece message for each block you've requested
+		messageID, piecePayload, err := readPeerMessage(conn)
+		if err != nil {
+			return nil, err
+		}
+		if messageID != 7 { // Piece message ID is 7
+			return nil, fmt.Errorf("expected piece message, got message ID %d", messageID)
+		}
+
+		messageBegin := int(piecePayload[4])<<24 | int(piecePayload[5])<<16 | int(piecePayload[6])<<8 | int(piecePayload[7])
+		copy(piece[messageBegin:messageBegin+blockLength], piecePayload[8:8+blockLength])
+	}
+	// Verify that the SHA-1 hash of the piece matches the expected hash from the torrent file.
+	//nolint:gosec // BitTorrent uses SHA-1 for info hashes.
+	actual := sha1.Sum(piece)
+	expect := []byte(torrentInfo.PieceHashes[pieceIndex])
+	if !bytes.Equal(actual[:], expect) {
+		return nil, fmt.Errorf("piece %d failed hash verification", pieceIndex)
+	}
+	return piece, nil
+}
+
+func readPeerMessage(conn net.Conn) (int, []byte, error) {
+	lengthBuf := make([]byte, 4)
+	_, err := io.ReadFull(conn, lengthBuf)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	length := int(lengthBuf[0])<<24 | int(lengthBuf[1])<<16 | int(lengthBuf[2])<<8 | int(lengthBuf[3])
+	if length == 0 {
+		return 0, nil, nil
+	}
+
+	payload := make([]byte, length)
+	_, err = io.ReadFull(conn, payload)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	messageID := payload[0]
+	return int(messageID), payload[1:], nil
+}
+
+func sendPeerMessage(conn net.Conn, messageID byte, payload []byte) error {
+	length := 1 + len(payload)
+	message := make([]byte, 4+length)
+	//nolint:gosec // BitTorrent protocol defines message length as uint32.
+	binary.BigEndian.PutUint32(message[0:4], uint32(length))
+	message[4] = messageID
+	copy(message[5:], payload)
+
+	_, err := conn.Write(message)
+	return err
 }

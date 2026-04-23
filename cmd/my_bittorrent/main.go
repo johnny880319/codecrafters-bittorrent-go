@@ -1,3 +1,4 @@
+// Package main is the entry point for the BitTorrent client.
 package main
 
 import (
@@ -6,103 +7,182 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/codecrafters-io/bittorrent-starter-go/internal/parse"
+	"github.com/codecrafters-io/bittorrent-starter-go/internal/bencode"
 	"github.com/codecrafters-io/bittorrent-starter-go/internal/peer"
 	// bencode "github.com/jackpal/bencode-go" // Available if you need it!
 )
 
-//nolint:gocognit // Will be refactored in the future.
 func main() {
 	command := os.Args[1]
 
 	switch command {
 	case "decode":
-		bencodedValue := os.Args[2]
-
-		decoded, _, err := parse.DecodeBencode(bencodedValue, 0)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-
-		jsonOutput, _ := json.Marshal(decoded)
-		fmt.Println(string(jsonOutput))
-
+		cmdDecode()
 	case "info":
-		file_name := os.Args[2]
-		//nolint:gosec // This is a command-line tool. We trust the user to provide a valid file path.
-		file_bytes, err := os.ReadFile(file_name)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-
-		torrentInfo, err := peer.GetInfo(file_bytes)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-
-		fmt.Println("Tracker URL: " + torrentInfo.TrackerURL)
-		fmt.Println("Length: " + strconv.Itoa(torrentInfo.Length))
-		fmt.Println("Info Hash: " + fmt.Sprintf("%x", torrentInfo.InfoHash))
-		fmt.Println("Piece Length: " + strconv.Itoa(torrentInfo.PieceLength))
-		fmt.Println("Piece Hashes:")
-		for i := 0; i < len(torrentInfo.PieceHashes); i++ {
-			fmt.Printf("%x\n", torrentInfo.PieceHashes[i])
-		}
-
+		cmdInfo()
 	case "peers":
-		file_name := os.Args[2]
-		//nolint:gosec // This is a command-line tool. We trust the user to provide a valid file path.
-		file_bytes, err := os.ReadFile(file_name)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-
-		torrentInfo, err := peer.GetInfo(file_bytes)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-
-		peers, err := peer.SendTrackerRequest(torrentInfo)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-		fmt.Println("Peers:")
-		for _, p := range peers {
-			fmt.Println(p)
-		}
-
+		cmdPeers()
 	case "handshake":
-		file_name := os.Args[2]
-		//nolint:gosec // This is a command-line tool. We trust the user to provide a valid file path.
-		file_bytes, err := os.ReadFile(file_name)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-
-		torrentInfo, err := peer.GetInfo(file_bytes)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-
-		peerIP := os.Args[3]
-
-		peerID, err := peer.PerformHandshake(peerIP, torrentInfo)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-		fmt.Printf("Peer ID: %x\n", peerID)
-
+		cmdHandshake()
+	case "download_piece":
+		cmdDownloadPiece()
 	default:
 		fmt.Println("Unknown command: " + command)
 		os.Exit(1)
+	}
+}
+
+func cmdDecode() {
+	bencodedValue := os.Args[2]
+	decoded, _, err := bencode.DecodeBencode(bencodedValue, 0)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	jsonOutput, _ := json.Marshal(decoded)
+	fmt.Println(string(jsonOutput))
+}
+
+func cmdInfo() {
+	fileName := os.Args[2]
+	//nolint:gosec // This is a command-line tool. We trust the user to provide a valid file path.
+	fileBytes, err := os.ReadFile(fileName)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	torrentInfo, err := peer.GetInfo(fileBytes)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Println("Tracker URL: " + torrentInfo.TrackerURL)
+	fmt.Println("Length: " + strconv.Itoa(torrentInfo.Length))
+	fmt.Println("Info Hash: " + fmt.Sprintf("%x", torrentInfo.InfoHash))
+	fmt.Println("Piece Length: " + strconv.Itoa(torrentInfo.PieceLength))
+	fmt.Println("Piece Hashes:")
+	for i := 0; i < len(torrentInfo.PieceHashes); i++ {
+		fmt.Printf("%x\n", torrentInfo.PieceHashes[i])
+	}
+}
+
+func cmdPeers() {
+	fileName := os.Args[2]
+	//nolint:gosec // This is a command-line tool. We trust the user to provide a valid file path.
+	fileBytes, err := os.ReadFile(fileName)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	torrentInfo, err := peer.GetInfo(fileBytes)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	peers, err := peer.SendTrackerRequest(torrentInfo)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Println("Peers:")
+	for _, p := range peers {
+		fmt.Println(p)
+	}
+}
+
+func cmdHandshake() {
+	fileName := os.Args[2]
+	peerIP := os.Args[3]
+	//nolint:gosec // This is a command-line tool. We trust the user to provide a valid file path.
+	fileBytes, err := os.ReadFile(fileName)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	torrentInfo, err := peer.GetInfo(fileBytes)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	conn, peerID, err := peer.OpenConnection(peerIP, torrentInfo)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer func() {
+		_ = conn.Close()
+	}()
+	fmt.Printf("Peer ID: %x\n", peerID)
+}
+
+func cmdDownloadPiece() {
+	if os.Args[2] != "-o" {
+		fmt.Println("Usage: download_piece -o <output_path>")
+		os.Exit(1)
+	}
+	outputPath := os.Args[3]
+	fileName := os.Args[4]
+	pieceIndex := os.Args[5]
+
+	// Read the torrent file to get the tracker URL
+	//nolint:gosec // CLI tool, file path is user-provided argument
+	fileBytes, err := os.ReadFile(fileName)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	torrentInfo, err := peer.GetInfo(fileBytes)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	// Perform the tracker GET request to get a list of peers
+	peers, err := peer.SendTrackerRequest(torrentInfo)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	// Establish a TCP connection with a peer, and perform a handshake
+	conn, _, err := peer.OpenConnection(peers[0], torrentInfo)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer func() {
+		_ = conn.Close()
+	}()
+
+	err = peer.SetupPeerConnection(conn)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	// Download the specified piece from the peer
+	pieceIndexInt, err := strconv.Atoi(pieceIndex)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	piece, err := peer.DownloadPiece(conn, torrentInfo, pieceIndexInt)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	// Save the downloaded piece to the output path
+	//nolint:gosec // This is a command-line tool. We trust the user to provide a valid file path.
+	err = os.WriteFile(outputPath, piece, 0o644)
+	if err != nil {
+		fmt.Println(err)
+		return
 	}
 }

@@ -1,4 +1,5 @@
-package parse
+// Package bencode provides functions to decode bencoded strings, integers, lists, and dictionaries.
+package bencode
 
 import (
 	"fmt"

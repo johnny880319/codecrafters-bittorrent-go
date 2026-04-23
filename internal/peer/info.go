@@ -1,3 +1,4 @@
+// Package peer provides functions to extract information from torrent files and interact with peers.
 package peer
 
 import (
@@ -5,7 +6,7 @@ import (
 	"crypto/sha1"
 	"fmt"
 
-	"github.com/codecrafters-io/bittorrent-starter-go/internal/parse"
+	"github.com/codecrafters-io/bittorrent-starter-go/internal/bencode"
 )
 
 // TorrentInfo holds the information extracted from a torrent file.
@@ -18,8 +19,8 @@ type TorrentInfo struct {
 }
 
 // GetInfo extracts the torrent information from the given torrent file bytes.
-func GetInfo(file_bytes []byte) (*TorrentInfo, error) {
-	decoded, _, err := parse.DecodeBencode(string(file_bytes), 0)
+func GetInfo(fileBytes []byte) (*TorrentInfo, error) {
+	decoded, _, err := bencode.DecodeBencode(string(fileBytes), 0)
 	if err != nil {
 		return nil, err
 	}
@@ -28,7 +29,7 @@ func GetInfo(file_bytes []byte) (*TorrentInfo, error) {
 
 	trackerURL := decoded.(map[string]interface{})["announce"].(string)
 	length := infoDict["length"].(int)
-	infoHash, err := calculateInfoHash(file_bytes)
+	infoHash, err := calculateInfoHash(fileBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -50,11 +51,11 @@ func GetInfo(file_bytes []byte) (*TorrentInfo, error) {
 	}, nil
 }
 
-func calculateInfoHash(file_bytes []byte) ([]byte, error) {
+func calculateInfoHash(fileBytes []byte) ([]byte, error) {
 	var infoDictStart int
 
-	for i := 0; i < len(file_bytes); i++ {
-		if string(file_bytes[i:i+6]) == "4:info" {
+	for i := 0; i < len(fileBytes); i++ {
+		if string(fileBytes[i:i+6]) == "4:info" {
 			infoDictStart = i + 6
 			break
 		}
@@ -63,13 +64,13 @@ func calculateInfoHash(file_bytes []byte) ([]byte, error) {
 		return nil, fmt.Errorf("info dictionary not found")
 	}
 
-	_, infoDictLen, err := parse.DecodeBencode(string(file_bytes[infoDictStart:]), 0)
+	_, infoDictLen, err := bencode.DecodeBencode(string(fileBytes[infoDictStart:]), 0)
 	if err != nil {
 		fmt.Println(err)
 		return nil, err
 	}
 
 	//nolint:gosec // BitTorrent info hash is defined as SHA-1.
-	infoHash := sha1.Sum(file_bytes[infoDictStart : infoDictStart+infoDictLen])
+	infoHash := sha1.Sum(fileBytes[infoDictStart : infoDictStart+infoDictLen])
 	return infoHash[:], nil
 }

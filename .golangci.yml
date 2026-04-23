@@ -62,6 +62,7 @@ linters:
         - name: exported
         - name: if-return
         - name: increment-decrement
+        - name: package-comments
         - name: range
         - name: receiver-naming
         - name: redefines-builtin-id
@@ -69,6 +70,7 @@ linters:
         - name: time-naming
         - name: unexported-return
         - name: unused-parameter
+        - name: var-naming
 
   exclusions:
     paths:
