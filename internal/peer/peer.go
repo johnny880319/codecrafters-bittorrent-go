@@ -11,79 +11,13 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/http"
-	"net/url"
 	"time"
 
-	"github.com/codecrafters-io/bittorrent-starter-go/internal/bencode"
 	"github.com/codecrafters-io/bittorrent-starter-go/internal/metainfo"
 )
 
-// SendTrackerRequest sends a request to the tracker and prints the list of peers.
-func SendTrackerRequest(metaInfo *metainfo.MetaInfo) ([]string, error) {
-	u, err := url.Parse(metaInfo.TrackerURL)
-	if err != nil {
-		return nil, err
-	}
-
-	q := u.Query()
-	q.Set("info_hash", string(metaInfo.InfoHash))
-	q.Set("peer_id", "PEERID12345678901234")
-	q.Set("port", "6881")
-	q.Set("uploaded", "0")
-	q.Set("downloaded", "0")
-	q.Set("left", fmt.Sprintf("%d", metaInfo.Length))
-	q.Set("compact", "1")
-	u.RawQuery = q.Encode()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	client := &http.Client{}
-
-	//nolint:gosec // BitTorrent clients intentionally connect to the tracker URL from the torrent file.
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	return parsePeers(body)
-}
-
-func parsePeers(body []byte) ([]string, error) {
-	content, _, err := bencode.DecodeBencode(string(body), 0)
-	if err != nil {
-		return nil, err
-	}
-
-	peers, ok := content.(map[string]interface{})["peers"].(string)
-	if !ok {
-		return nil, fmt.Errorf("peers field is not a string")
-	}
-
-	var peerList []string
-	for i := 0; i < len(peers); i += 6 {
-		ip := peers[i : i+4]
-		port := peers[i+4 : i+6]
-		peerList = append(peerList, fmt.Sprintf("%d.%d.%d.%d:%d", ip[0], ip[1], ip[2], ip[3], int(port[0])*256+int(port[1])))
-	}
-	return peerList, nil
-}
-
-// OpenConnection opens a TCP connection to the given peer IP and performs the BitTorrent handshake.
-func OpenConnection(peerIP string, metaInfo *metainfo.MetaInfo) (net.Conn, string, error) {
+// Dial opens a TCP connection to the given peer IP and performs the BitTorrent handshake.
+func Dial(peerIP string, metaInfo *metainfo.MetaInfo) (net.Conn, string, error) {
 	peerID := "PEERID12345678901234"
 
 	content := make([]byte, 0, 68)
@@ -126,27 +60,10 @@ func OpenConnection(peerIP string, metaInfo *metainfo.MetaInfo) (net.Conn, strin
 	return conn, string(response[48:68]), nil
 }
 
-// ExchangePeerMessages performs the message exchange with the peer to download the pieces of the file.
-// func ExchangePeerMessages(conn net.Conn, torrentInfo *TorrentInfo) ([]byte, error) {
-// 	if err := SetupPeerConnection(conn); err != nil {
-// 		return nil, err
-// 	}
-
-// 	pieces := make([]byte, 0, torrentInfo.Length)
-// 	for pieceIndex := 0; pieceIndex*torrentInfo.PieceLength < torrentInfo.Length; pieceIndex++ {
-// 		piece, err := DownloadPiece(conn, torrentInfo, pieceIndex)
-// 		if err != nil {
-// 			return nil, err
-// 		}
-// 		pieces = append(pieces, piece...)
-// 	}
-// 	return pieces, nil
-// }
-
-// SetupPeerConnection initiates the peer connection.
-func SetupPeerConnection(conn net.Conn) error {
+// Setup initiates the peer connection.
+func Setup(conn net.Conn) error {
 	// Wait for a bitfield message from the peer indicating which pieces it has
-	messageID, _, err := readPeerMessage(conn)
+	messageID, _, err := readMessage(conn)
 	if err != nil {
 		return err
 	}
@@ -155,13 +72,13 @@ func SetupPeerConnection(conn net.Conn) error {
 	}
 
 	// Send an interested message
-	err = sendPeerMessage(conn, 2, nil) // Interested message ID is 2
+	err = sendMessage(conn, 2, nil) // Interested message ID is 2
 	if err != nil {
 		return err
 	}
 
 	// Wait until you receive an unchoke message back
-	messageID, _, err = readPeerMessage(conn)
+	messageID, _, err = readMessage(conn)
 	if err != nil {
 		return err
 	}
@@ -186,13 +103,13 @@ func DownloadPiece(conn net.Conn, metaInfo *metainfo.MetaInfo, pieceIndex int) (
 		//nolint:gosec // BitTorrent protocol defines block length as uint32.
 		binary.BigEndian.PutUint32(payload[8:12], uint32(blockLength))
 
-		err := sendPeerMessage(conn, 6, payload) // Request message ID is 6
+		err := sendMessage(conn, 6, payload) // Request message ID is 6
 		if err != nil {
 			return nil, err
 		}
 
 		// Wait for a piece message for each block you've requested
-		messageID, piecePayload, err := readPeerMessage(conn)
+		messageID, piecePayload, err := readMessage(conn)
 		if err != nil {
 			return nil, err
 		}
@@ -213,7 +130,7 @@ func DownloadPiece(conn net.Conn, metaInfo *metainfo.MetaInfo, pieceIndex int) (
 	return piece, nil
 }
 
-func readPeerMessage(conn net.Conn) (byte, []byte, error) {
+func readMessage(conn net.Conn) (byte, []byte, error) {
 	for {
 		lengthBuf := make([]byte, 4)
 		_, err := io.ReadFull(conn, lengthBuf)
@@ -237,7 +154,7 @@ func readPeerMessage(conn net.Conn) (byte, []byte, error) {
 	}
 }
 
-func sendPeerMessage(conn net.Conn, messageID byte, payload []byte) error {
+func sendMessage(conn net.Conn, messageID byte, payload []byte) error {
 	length := 1 + len(payload)
 	message := make([]byte, 4+length)
 	//nolint:gosec // BitTorrent protocol defines message length as uint32.

@@ -9,6 +9,7 @@ import (
 	"github.com/codecrafters-io/bittorrent-starter-go/internal/bencode"
 	"github.com/codecrafters-io/bittorrent-starter-go/internal/metainfo"
 	"github.com/codecrafters-io/bittorrent-starter-go/internal/peer"
+	"github.com/codecrafters-io/bittorrent-starter-go/internal/tracker"
 )
 
 func cmdDecode() {
@@ -32,7 +33,7 @@ func cmdInfo() {
 		return
 	}
 
-	torrentInfo, err := metainfo.GetInfo(fileBytes)
+	torrentInfo, err := metainfo.Parse(fileBytes)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -57,13 +58,13 @@ func cmdPeers() {
 		return
 	}
 
-	torrentInfo, err := metainfo.GetInfo(fileBytes)
+	torrentInfo, err := metainfo.Parse(fileBytes)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	peers, err := peer.SendTrackerRequest(torrentInfo)
+	peers, err := tracker.GetPeers(torrentInfo)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -84,13 +85,13 @@ func cmdHandshake() {
 		return
 	}
 
-	torrentInfo, err := metainfo.GetInfo(fileBytes)
+	torrentInfo, err := metainfo.Parse(fileBytes)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	conn, peerID, err := peer.OpenConnection(peerIP, torrentInfo)
+	conn, peerID, err := peer.Dial(peerIP, torrentInfo)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -117,21 +118,21 @@ func cmdDownloadPiece() {
 		fmt.Println(err)
 		return
 	}
-	torrentInfo, err := metainfo.GetInfo(fileBytes)
+	torrentInfo, err := metainfo.Parse(fileBytes)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
 	// Perform the tracker GET request to get a list of peers
-	peers, err := peer.SendTrackerRequest(torrentInfo)
+	peers, err := tracker.GetPeers(torrentInfo)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
 	// Establish a TCP connection with a peer, and perform a handshake
-	conn, _, err := peer.OpenConnection(peers[0], torrentInfo)
+	conn, _, err := peer.Dial(peers[0], torrentInfo)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -140,7 +141,7 @@ func cmdDownloadPiece() {
 		_ = conn.Close()
 	}()
 
-	err = peer.SetupPeerConnection(conn)
+	err = peer.Setup(conn)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -181,21 +182,21 @@ func cmdDownload() {
 		fmt.Println(err)
 		return
 	}
-	torrentInfo, err := metainfo.GetInfo(fileBytes)
+	torrentInfo, err := metainfo.Parse(fileBytes)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
 	// Perform the tracker GET request to get a list of peers
-	peers, err := peer.SendTrackerRequest(torrentInfo)
+	peers, err := tracker.GetPeers(torrentInfo)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
 	// Establish a TCP connection with a peer, and perform a handshake
-	conn, _, err := peer.OpenConnection(peers[0], torrentInfo)
+	conn, _, err := peer.Dial(peers[0], torrentInfo)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -204,7 +205,7 @@ func cmdDownload() {
 		_ = conn.Close()
 	}()
 
-	err = peer.SetupPeerConnection(conn)
+	err = peer.Setup(conn)
 	if err != nil {
 		fmt.Println(err)
 		return

@@ -18,8 +18,8 @@ type MetaInfo struct {
 	PieceHashes []string
 }
 
-// GetInfo extracts the torrent information from the given torrent file bytes.
-func GetInfo(fileBytes []byte) (*MetaInfo, error) {
+// Parse extracts the torrent information from the given torrent file bytes.
+func Parse(fileBytes []byte) (*MetaInfo, error) {
 	decoded, _, err := bencode.DecodeBencode(string(fileBytes), 0)
 	if err != nil {
 		return nil, err
