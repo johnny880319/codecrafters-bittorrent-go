@@ -1,4 +1,4 @@
-// Package peer provides functions to extract information from torrent files and interact with peers.
+// Package peer implements the BitTorrent peer wire protocol.
 package peer
 
 import (
@@ -14,6 +14,15 @@ import (
 	"time"
 
 	"github.com/codecrafters-io/bittorrent-starter-go/internal/metainfo"
+)
+
+const blockSize = 16 * 1024 // 16 kiB
+const (
+	msgUnchoke    byte = 1
+	msgInterested byte = 2
+	msgBitfield   byte = 5
+	msgRequest    byte = 6
+	msgPiece      byte = 7
 )
 
 // Dial opens a TCP connection to the given peer IP and performs the BitTorrent handshake.
@@ -60,19 +69,20 @@ func Dial(peerIP string, metaInfo *metainfo.MetaInfo) (net.Conn, string, error) 
 	return conn, string(response[48:68]), nil
 }
 
-// Setup initiates the peer connection.
+// Setup completes the post-handshake negotiation: reads the peer's bitfield,
+// sends Interested, and waits for Unchoke.
 func Setup(conn net.Conn) error {
 	// Wait for a bitfield message from the peer indicating which pieces it has
 	messageID, _, err := readMessage(conn)
 	if err != nil {
 		return err
 	}
-	if messageID != 5 { // Bitfield message ID is 5
+	if messageID != msgBitfield {
 		return fmt.Errorf("expected bitfield message, got message ID %d", messageID)
 	}
 
 	// Send an interested message
-	err = sendMessage(conn, 2, nil) // Interested message ID is 2
+	err = sendMessage(conn, msgInterested, nil)
 	if err != nil {
 		return err
 	}
@@ -82,7 +92,7 @@ func Setup(conn net.Conn) error {
 	if err != nil {
 		return err
 	}
-	if messageID != 1 { // Unchoke message ID is 1
+	if messageID != msgUnchoke {
 		return fmt.Errorf("expected unchoke message, got message ID %d", messageID)
 	}
 	return nil
@@ -92,10 +102,10 @@ func Setup(conn net.Conn) error {
 func DownloadPiece(conn net.Conn, metaInfo *metainfo.MetaInfo, pieceIndex int) ([]byte, error) {
 	pieceLength := min(metaInfo.PieceLength, metaInfo.Length-pieceIndex*metaInfo.PieceLength)
 	piece := make([]byte, pieceLength)
-	for blockIndex := 0; blockIndex*16*1024 < pieceLength; blockIndex++ {
-		// Break the piece into blocks of 16 kiB (16 * 1024 bytes) and send a request message for each block
-		blockBegin := blockIndex * 16 * 1024
-		blockLength := min(16*1024, pieceLength-blockBegin)
+	for blockIndex := 0; blockIndex*blockSize < pieceLength; blockIndex++ {
+		// Break the piece into blocks of 16 kiB and send a request message for each block
+		blockBegin := blockIndex * blockSize
+		blockLength := min(blockSize, pieceLength-blockBegin)
 		payload := make([]byte, 12)
 		//nolint:gosec // BitTorrent protocol defines piece index, block begin, and block length as uint32.
 		binary.BigEndian.PutUint32(payload[0:4], uint32(pieceIndex))
@@ -103,7 +113,7 @@ func DownloadPiece(conn net.Conn, metaInfo *metainfo.MetaInfo, pieceIndex int) (
 		//nolint:gosec // BitTorrent protocol defines block length as uint32.
 		binary.BigEndian.PutUint32(payload[8:12], uint32(blockLength))
 
-		err := sendMessage(conn, 6, payload) // Request message ID is 6
+		err := sendMessage(conn, msgRequest, payload)
 		if err != nil {
 			return nil, err
 		}
@@ -113,7 +123,7 @@ func DownloadPiece(conn net.Conn, metaInfo *metainfo.MetaInfo, pieceIndex int) (
 		if err != nil {
 			return nil, err
 		}
-		if messageID != 7 { // Piece message ID is 7
+		if messageID != msgPiece {
 			return nil, fmt.Errorf("expected piece message, got message ID %d", messageID)
 		}
 

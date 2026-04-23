@@ -66,7 +66,6 @@ func calculateInfoHash(fileBytes []byte) ([]byte, error) {
 
 	_, infoDictLen, err := bencode.DecodeBencode(string(fileBytes[infoDictStart:]), 0)
 	if err != nil {
-		fmt.Println(err)
 		return nil, err
 	}
 
