@@ -8,4 +8,4 @@
 
 set -e # Exit on failure
 
-go build -o /tmp/codecrafters-build-bittorrent-go app/*.go
+go build -o /tmp/codecrafters-build-bittorrent-go cmd/my_bittorrent/*.go
