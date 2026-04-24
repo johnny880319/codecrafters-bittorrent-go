@@ -157,7 +157,7 @@ func cmdMagnetParse() {
 	die(err)
 
 	fmt.Println("Tracker URL: " + trackerURL)
-	fmt.Printf("Info Hash: %x\n", infoHash)
+	fmt.Println("Info Hash: " + infoHash)
 }
 
 func loadTorrent(path string) (*metainfo.MetaInfo, error) {
