@@ -160,6 +160,12 @@ func ExtensionHandshake(conn net.Conn) error {
 	if err != nil {
 		return err
 	}
+
+	_, _, err = readMessage(conn)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
