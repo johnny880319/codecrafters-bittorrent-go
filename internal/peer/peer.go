@@ -145,6 +145,12 @@ func DownloadPiece(conn net.Conn, metaInfo *metainfo.MetaInfo, pieceIndex int) (
 
 // ExtensionHandshake performs the extension protocol handshake.
 func ExtensionHandshake(conn net.Conn) (int, error) {
+	// Receive the bitfield message
+	_, _, err := readMessage(conn)
+	if err != nil {
+		return 0, err
+	}
+
 	payload := []byte{0} // extension message ID
 	handshakeDict := map[string]interface{}{
 		"m": map[string]interface{}{
