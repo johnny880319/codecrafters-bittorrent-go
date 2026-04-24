@@ -234,7 +234,7 @@ func cmdMagnetInfo() {
 
 	fmt.Println("Tracker URL: " + trackerURL)
 	fmt.Println("Length: " + strconv.Itoa(infoDict.Length))
-	fmt.Println("Info Hash: " + fmt.Sprintf("%x", infoHash))
+	fmt.Println("Info Hash: " + fmt.Sprintf("%x", infoHashBytes))
 	fmt.Println("Piece Length: " + strconv.Itoa(infoDict.PieceLength))
 	fmt.Println("Piece Hashes:")
 	for i := 0; i < len(infoDict.PieceHashes); i++ {
