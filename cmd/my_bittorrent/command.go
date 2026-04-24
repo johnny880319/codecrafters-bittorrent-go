@@ -225,8 +225,17 @@ func cmdMagnetInfo() {
 	extensionID, err := peer.ExtensionHandshake(conn)
 	die(err)
 
-	err = peer.ExtensionMetadata(conn, extensionID)
+	metaInfo, err = peer.ExtensionMetadata(conn, extensionID)
 	die(err)
+
+	fmt.Println("Tracker URL: " + metaInfo.TrackerURL)
+	fmt.Println("Length: " + strconv.Itoa(metaInfo.Length))
+	fmt.Println("Info Hash: " + fmt.Sprintf("%x", metaInfo.InfoHash))
+	fmt.Println("Piece Length: " + strconv.Itoa(metaInfo.PieceLength))
+	fmt.Println("Piece Hashes:")
+	for i := 0; i < len(metaInfo.PieceHashes); i++ {
+		fmt.Printf("%x\n", metaInfo.PieceHashes[i])
+	}
 }
 
 func loadTorrent(path string) (*metainfo.MetaInfo, error) {
