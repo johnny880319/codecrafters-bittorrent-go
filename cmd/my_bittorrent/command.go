@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -169,9 +170,12 @@ func cmdMagnetHandshake() {
 	trackerURL, infoHash, err := magnet.Parse(magnetLink)
 	die(err)
 
+	infoHashBytes, err := hex.DecodeString(infoHash)
+	die(err)
+
 	metaInfo := &metainfo.MetaInfo{
 		TrackerURL: trackerURL,
-		InfoHash:   []byte(infoHash),
+		InfoHash:   infoHashBytes,
 		Length:     999, // Placeholder length since we don't have the torrent file
 	}
 
