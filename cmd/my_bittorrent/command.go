@@ -188,6 +188,9 @@ func cmdMagnetHandshake() {
 		_ = conn.Close()
 	}()
 
+	err = peer.ExtensionHandshake(conn)
+	die(err)
+
 	fmt.Printf("Peer ID: %x\n", peerID)
 }
 
