@@ -3,28 +3,28 @@ package magnet
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 )
 
 // Parse extracts the tracker URL and info hash from a magnet URI.
 func Parse(magnetURI string) (trackerURL string, infoHash string, err error) {
-	trackerURLStart := strings.Index(magnetURI, "tr=") + len("tr=")
-	if trackerURLStart < len("tr=") {
-		return "", "", fmt.Errorf("invalid magnet URI: missing 'tr=' parameter")
+	u, err := url.Parse(magnetURI)
+	if err != nil {
+		return "", "", fmt.Errorf("invalid magnet URI: %w", err)
 	}
-	trackerURLEnd := strings.Index(magnetURI[trackerURLStart:], "&")
-	if trackerURLEnd == -1 {
-		trackerURLEnd = len(magnetURI)
-	} else {
-		trackerURLEnd += trackerURLStart
-	}
-	trackerURL = magnetURI[trackerURLStart:trackerURLEnd]
 
-	infoHashStart := strings.Index(magnetURI, "xt=urn:btih:") + len("xt=urn:btih:")
-	if infoHashStart < len("xt=urn:btih:") {
-		return "", "", fmt.Errorf("invalid magnet URI: missing 'xt=urn:btih:' prefix")
+	values := u.Query()
+
+	trackerURL = values.Get("tr")
+	if trackerURL == "" {
+		return "", "", fmt.Errorf("invalid magnet URI: missing 'tr' parameter")
 	}
-	infoHash = magnetURI[infoHashStart : infoHashStart+40]
+
+	infoHash = strings.TrimPrefix(values.Get("xt"), "urn:btih:")
+	if infoHash == "" {
+		return "", "", fmt.Errorf("invalid magnet URI: missing 'xt' parameter")
+	}
 
 	return trackerURL, infoHash, nil
 }
