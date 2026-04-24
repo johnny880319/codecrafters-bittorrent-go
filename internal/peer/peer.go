@@ -33,6 +33,7 @@ func Dial(peerIP string, metaInfo *metainfo.MetaInfo) (net.Conn, string, error) 
 	content = append(content, byte(19))
 	content = append(content, []byte("BitTorrent protocol")...)
 	content = append(content, make([]byte, 8)...) // Reserved bytes
+	content[len(content)-3] = 16                  // Set the extension protocol bit in the reserved bytes
 	content = append(content, metaInfo.InfoHash...)
 	content = append(content, []byte(peerID)...)
 
