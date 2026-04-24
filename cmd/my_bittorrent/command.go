@@ -172,6 +172,7 @@ func cmdMagnetHandshake() {
 	metaInfo := &metainfo.MetaInfo{
 		TrackerURL: trackerURL,
 		InfoHash:   []byte(infoHash),
+		Length:     999, // Placeholder length since we don't have the torrent file
 	}
 
 	peers, err := tracker.GetPeers(metaInfo)
