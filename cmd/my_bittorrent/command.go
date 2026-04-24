@@ -188,10 +188,11 @@ func cmdMagnetHandshake() {
 		_ = conn.Close()
 	}()
 
-	err = peer.ExtensionHandshake(conn)
+	extensionID, err := peer.ExtensionHandshake(conn)
 	die(err)
 
 	fmt.Printf("Peer ID: %x\n", peerID)
+	fmt.Printf("Peer Metadata Extension ID: %d\n", extensionID)
 }
 
 func loadTorrent(path string) (*metainfo.MetaInfo, error) {

@@ -144,7 +144,7 @@ func DownloadPiece(conn net.Conn, metaInfo *metainfo.MetaInfo, pieceIndex int) (
 }
 
 // ExtensionHandshake performs the extension protocol handshake.
-func ExtensionHandshake(conn net.Conn) error {
+func ExtensionHandshake(conn net.Conn) (int, error) {
 	payload := []byte{0} // extension message ID
 	handshakeDict := map[string]interface{}{
 		"m": map[string]interface{}{
@@ -153,20 +153,42 @@ func ExtensionHandshake(conn net.Conn) error {
 	}
 	encodedHandshake, err := bencode.EncodeBencode(handshakeDict)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	payload = append(payload, encodedHandshake...)
 	err = sendMessage(conn, msgExtension, payload)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	_, _, err = readMessage(conn)
+	receivedID, receivedPayload, err := readMessage(conn)
 	if err != nil {
-		return err
+		return 0, err
+	}
+	if receivedID != msgExtension {
+		return 0, fmt.Errorf("expected extension message, got message ID %d", receivedID)
 	}
 
-	return nil
+	responseDict, _, err := bencode.DecodeBencode(string(receivedPayload), 1)
+	if err != nil {
+		return 0, err
+	}
+
+	responseMap, ok := responseDict.(map[string]interface{})
+	if !ok {
+		return 0, fmt.Errorf("invalid extension handshake response: expected a dictionary")
+	}
+
+	mValue, ok := responseMap["m"].(map[string]interface{})
+	if !ok {
+		return 0, fmt.Errorf("invalid extension handshake response: missing 'm' dictionary")
+	}
+
+	utMetadataID, ok := mValue["ut_metadata"].(int)
+	if !ok {
+		return 0, fmt.Errorf("invalid extension handshake response: missing 'ut_metadata' ID")
+	}
+	return utMetadataID, nil
 }
 
 func readMessage(conn net.Conn) (byte, []byte, error) {
