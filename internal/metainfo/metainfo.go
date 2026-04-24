@@ -11,9 +11,14 @@ import (
 
 // MetaInfo holds the information extracted from a torrent file.
 type MetaInfo struct {
-	TrackerURL  string
+	TrackerURL string
+	InfoHash   []byte
+	InfoDict   InfoDict
+}
+
+// InfoDict holds the length, piece length, and piece hashes extracted from the info dictionary of a torrent file.
+type InfoDict struct {
 	Length      int
-	InfoHash    []byte
 	PieceLength int
 	PieceHashes []string
 }
@@ -25,14 +30,28 @@ func Parse(fileBytes []byte) (*MetaInfo, error) {
 		return nil, err
 	}
 
-	infoDict := decoded.(map[string]interface{})["info"].(map[string]interface{})
-
 	trackerURL := decoded.(map[string]interface{})["announce"].(string)
-	length := infoDict["length"].(int)
 	infoHash, err := calculateInfoHash(fileBytes)
 	if err != nil {
 		return nil, err
 	}
+
+	infoDictRaw := decoded.(map[string]interface{})["info"].(map[string]interface{})
+	infoDict, err := ParseInfoDict(infoDictRaw)
+	if err != nil {
+		return nil, err
+	}
+
+	return &MetaInfo{
+		TrackerURL: trackerURL,
+		InfoHash:   infoHash,
+		InfoDict:   *infoDict,
+	}, nil
+}
+
+// ParseInfoDict extracts the length, piece length, and piece hashes from the info dictionary.
+func ParseInfoDict(infoDict map[string]interface{}) (*InfoDict, error) {
+	length := infoDict["length"].(int)
 	pieceLength := infoDict["piece length"].(int)
 
 	var pieceHashes []string
@@ -42,10 +61,8 @@ func Parse(fileBytes []byte) (*MetaInfo, error) {
 		pieceHashes = append(pieceHashes, pieceList[i:i+20])
 	}
 
-	return &MetaInfo{
-		TrackerURL:  trackerURL,
+	return &InfoDict{
 		Length:      length,
-		InfoHash:    infoHash,
 		PieceLength: pieceLength,
 		PieceHashes: pieceHashes,
 	}, nil

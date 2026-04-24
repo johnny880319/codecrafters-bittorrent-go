@@ -26,7 +26,7 @@ func GetPeers(metaInfo *metainfo.MetaInfo) ([]string, error) {
 	q.Set("port", "6881")
 	q.Set("uploaded", "0")
 	q.Set("downloaded", "0")
-	q.Set("left", fmt.Sprintf("%d", metaInfo.Length))
+	q.Set("left", fmt.Sprintf("%d", metaInfo.InfoDict.Length))
 	q.Set("compact", "1")
 	u.RawQuery = q.Encode()
 

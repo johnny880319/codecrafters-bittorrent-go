@@ -38,12 +38,12 @@ func cmdInfo() {
 	die(err)
 
 	fmt.Println("Tracker URL: " + metaInfo.TrackerURL)
-	fmt.Println("Length: " + strconv.Itoa(metaInfo.Length))
+	fmt.Println("Length: " + strconv.Itoa(metaInfo.InfoDict.Length))
 	fmt.Println("Info Hash: " + fmt.Sprintf("%x", metaInfo.InfoHash))
-	fmt.Println("Piece Length: " + strconv.Itoa(metaInfo.PieceLength))
+	fmt.Println("Piece Length: " + strconv.Itoa(metaInfo.InfoDict.PieceLength))
 	fmt.Println("Piece Hashes:")
-	for i := 0; i < len(metaInfo.PieceHashes); i++ {
-		fmt.Printf("%x\n", metaInfo.PieceHashes[i])
+	for i := 0; i < len(metaInfo.InfoDict.PieceHashes); i++ {
+		fmt.Printf("%x\n", metaInfo.InfoDict.PieceHashes[i])
 	}
 }
 
@@ -136,7 +136,7 @@ func cmdDownload() {
 	}()
 
 	var pieces []byte
-	for pieceIndexInt := 0; pieceIndexInt*metaInfo.PieceLength < metaInfo.Length; pieceIndexInt++ {
+	for pieceIndexInt := 0; pieceIndexInt*metaInfo.InfoDict.PieceLength < metaInfo.InfoDict.Length; pieceIndexInt++ {
 		piece, err := peer.DownloadPiece(conn, metaInfo, pieceIndexInt)
 		die(err)
 		pieces = append(pieces, piece...)
@@ -176,7 +176,9 @@ func cmdMagnetHandshake() {
 	metaInfo := &metainfo.MetaInfo{
 		TrackerURL: trackerURL,
 		InfoHash:   infoHashBytes,
-		Length:     999, // Placeholder length since we don't have the torrent file
+		InfoDict: metainfo.InfoDict{
+			Length: 999, // Placeholder length since we don't have the torrent file
+		},
 	}
 
 	peers, err := tracker.GetPeers(metaInfo)
@@ -210,7 +212,9 @@ func cmdMagnetInfo() {
 	metaInfo := &metainfo.MetaInfo{
 		TrackerURL: trackerURL,
 		InfoHash:   infoHashBytes,
-		Length:     999, // Placeholder length since we don't have the torrent file
+		InfoDict: metainfo.InfoDict{
+			Length: 999, // Placeholder length since we don't have the torrent file
+		},
 	}
 
 	peers, err := tracker.GetPeers(metaInfo)
@@ -225,16 +229,16 @@ func cmdMagnetInfo() {
 	extensionID, err := peer.ExtensionHandshake(conn)
 	die(err)
 
-	metaInfo, err = peer.ExtensionMetadata(conn, extensionID)
+	infoDict, err := peer.ExtensionMetadata(conn, extensionID)
 	die(err)
 
-	fmt.Println("Tracker URL: " + metaInfo.TrackerURL)
-	fmt.Println("Length: " + strconv.Itoa(metaInfo.Length))
-	fmt.Println("Info Hash: " + fmt.Sprintf("%x", metaInfo.InfoHash))
-	fmt.Println("Piece Length: " + strconv.Itoa(metaInfo.PieceLength))
+	fmt.Println("Tracker URL: " + trackerURL)
+	fmt.Println("Length: " + strconv.Itoa(infoDict.Length))
+	fmt.Println("Info Hash: " + fmt.Sprintf("%x", infoHash))
+	fmt.Println("Piece Length: " + strconv.Itoa(infoDict.PieceLength))
 	fmt.Println("Piece Hashes:")
-	for i := 0; i < len(metaInfo.PieceHashes); i++ {
-		fmt.Printf("%x\n", metaInfo.PieceHashes[i])
+	for i := 0; i < len(infoDict.PieceHashes); i++ {
+		fmt.Printf("%x\n", infoDict.PieceHashes[i])
 	}
 }
 

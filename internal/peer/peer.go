@@ -4,6 +4,7 @@ package peer
 import (
 	"bytes"
 	"context"
+	"os"
 
 	//nolint:gosec // BitTorrent uses SHA-1 for info hashes.
 	"crypto/sha1"
@@ -103,7 +104,7 @@ func Setup(conn net.Conn) error {
 
 // DownloadPiece breaks the piece into blocks of 16 kiB and download.
 func DownloadPiece(conn net.Conn, metaInfo *metainfo.MetaInfo, pieceIndex int) ([]byte, error) {
-	pieceLength := min(metaInfo.PieceLength, metaInfo.Length-pieceIndex*metaInfo.PieceLength)
+	pieceLength := min(metaInfo.InfoDict.PieceLength, metaInfo.InfoDict.Length-pieceIndex*metaInfo.InfoDict.PieceLength)
 	piece := make([]byte, pieceLength)
 	for blockIndex := 0; blockIndex*blockSize < pieceLength; blockIndex++ {
 		// Break the piece into blocks of 16 kiB and send a request message for each block
@@ -136,7 +137,7 @@ func DownloadPiece(conn net.Conn, metaInfo *metainfo.MetaInfo, pieceIndex int) (
 	// Verify that the SHA-1 hash of the piece matches the expected hash from the torrent file.
 	//nolint:gosec // BitTorrent uses SHA-1 for info hashes.
 	actual := sha1.Sum(piece)
-	expect := []byte(metaInfo.PieceHashes[pieceIndex])
+	expect := []byte(metaInfo.InfoDict.PieceHashes[pieceIndex])
 	if !bytes.Equal(actual[:], expect) {
 		return nil, fmt.Errorf("piece %d failed hash verification", pieceIndex)
 	}
@@ -198,7 +199,7 @@ func ExtensionHandshake(conn net.Conn) (int, error) {
 }
 
 // ExtensionMetadata requests the metadata using the extension protocol.
-func ExtensionMetadata(conn net.Conn, extensionID int) (*metainfo.MetaInfo, error) {
+func ExtensionMetadata(conn net.Conn, extensionID int) (*metainfo.InfoDict, error) {
 	//nolint:gosec // This is a command-line tool. We trust the user to provide a valid extension ID.
 	payload := []byte{byte(extensionID)}
 	metadataDict := map[string]interface{}{
@@ -223,11 +224,25 @@ func ExtensionMetadata(conn net.Conn, extensionID int) (*metainfo.MetaInfo, erro
 		return nil, fmt.Errorf("expected extension message, got message ID %d", receivedID)
 	}
 
-	_, start, err := bencode.DecodeBencode(string(receivedPayload[1:]), 1)
+	receivedText := string(receivedPayload)
+
+	// print to stderr for debugging
+	fmt.Fprintln(os.Stderr, receivedText)
+	_, start, err := bencode.DecodeBencode(receivedText, 1)
 	if err != nil {
 		return nil, err
 	}
-	return metainfo.Parse(receivedPayload[start:])
+
+	infoDictRaw, _, err := bencode.DecodeBencode(receivedText, start)
+	if err != nil {
+		return nil, err
+	}
+
+	infoDict, err := metainfo.ParseInfoDict(infoDictRaw.(map[string]interface{}))
+	if err != nil {
+		return nil, err
+	}
+	return infoDict, nil
 }
 
 func readMessage(conn net.Conn) (byte, []byte, error) {
