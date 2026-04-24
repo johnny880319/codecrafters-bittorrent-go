@@ -13,6 +13,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/codecrafters-io/bittorrent-starter-go/internal/bencode"
 	"github.com/codecrafters-io/bittorrent-starter-go/internal/metainfo"
 )
 
@@ -23,6 +24,7 @@ const (
 	msgBitfield   byte = 5
 	msgRequest    byte = 6
 	msgPiece      byte = 7
+	msgExtension  byte = 20
 )
 
 // Dial opens a TCP connection to the given peer IP and performs the BitTorrent handshake.
@@ -139,6 +141,26 @@ func DownloadPiece(conn net.Conn, metaInfo *metainfo.MetaInfo, pieceIndex int) (
 		return nil, fmt.Errorf("piece %d failed hash verification", pieceIndex)
 	}
 	return piece, nil
+}
+
+// ExtensionHandshake performs the extension protocol handshake.
+func ExtensionHandshake(conn net.Conn) error {
+	payload := []byte{0} // extension message ID
+	handshakeDict := map[string]interface{}{
+		"m": map[string]interface{}{
+			"ut_metadata": 16,
+		},
+	}
+	encodedHandshake, err := bencode.EncodeBencode(handshakeDict)
+	if err != nil {
+		return err
+	}
+	payload = append(payload, encodedHandshake...)
+	err = sendMessage(conn, msgExtension, payload)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func readMessage(conn net.Conn) (byte, []byte, error) {

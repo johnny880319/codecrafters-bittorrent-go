@@ -3,6 +3,7 @@ package bencode
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"unicode"
 	// bencode "github.com/jackpal/bencode-go" // Available if you need it!
@@ -23,6 +24,24 @@ func DecodeBencode(bencodedString string, start int) (decoded interface{}, end i
 		return decodeDict(bencodedString, start)
 	default:
 		return "", start, fmt.Errorf("unsupported bencode type at position %d: %q", start, bencodedString[start])
+	}
+}
+
+// EncodeBencode Example:
+// - "hello" -> 5:hello
+// - 12345 -> i12345e
+func EncodeBencode(value interface{}) (bencodedString string, err error) {
+	switch value := value.(type) {
+	case string:
+		return encodeString(value), nil
+	case int:
+		return encodeInteger(value), nil
+	case []interface{}:
+		return encodeList(value)
+	case map[string]interface{}:
+		return encodeDict(value)
+	default:
+		return "", fmt.Errorf("unsupported type for bencode encoding: %T", value)
 	}
 }
 
@@ -99,4 +118,47 @@ func decodeDict(bencodedString string, start int) (decoded map[string]interface{
 	}
 
 	return dict, i + 1, nil
+}
+
+func encodeString(value string) string {
+	return fmt.Sprintf("%d:%s", len(value), value)
+}
+
+func encodeInteger(value int) string {
+	return fmt.Sprintf("i%de", value)
+}
+
+func encodeList(value []interface{}) (bencodedString string, err error) {
+	result := "l"
+	for _, element := range value {
+		encodedElement, err := EncodeBencode(element)
+		if err != nil {
+			return "", err
+		}
+		result += encodedElement
+	}
+	result += "e"
+	return result, nil
+}
+
+func encodeDict(value map[string]interface{}) (bencodedString string, err error) {
+	keys := make([]string, 0, len(value))
+	for key := range value {
+		keys = append(keys, key)
+	}
+	// Sort keys to ensure deterministic encoding
+	sort.Strings(keys)
+
+	result := "d"
+	for _, key := range keys {
+		val := value[key]
+		encodedKey := encodeString(key)
+		encodedValue, err := EncodeBencode(val)
+		if err != nil {
+			return "", err
+		}
+		result += encodedKey + encodedValue
+	}
+	result += "e"
+	return result, nil
 }
