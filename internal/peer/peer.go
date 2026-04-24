@@ -197,6 +197,26 @@ func ExtensionHandshake(conn net.Conn) (int, error) {
 	return utMetadataID, nil
 }
 
+// ExtensionMetadata requests the metadata using the extension protocol.
+func ExtensionMetadata(conn net.Conn, extensionID int) error {
+	//nolint:gosec // This is a command-line tool. We trust the user to provide a valid extension ID.
+	payload := []byte{byte(extensionID)}
+	metadataDict := map[string]interface{}{
+		"msg_type": 0, // request
+		"piece":    0,
+	}
+	encodedMetadata, err := bencode.EncodeBencode(metadataDict)
+	if err != nil {
+		return err
+	}
+	payload = append(payload, encodedMetadata...)
+	err = sendMessage(conn, msgExtension, payload)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func readMessage(conn net.Conn) (byte, []byte, error) {
 	for {
 		lengthBuf := make([]byte, 4)

@@ -30,6 +30,8 @@ func main() {
 		cmdMagnetParse()
 	case "magnet_handshake":
 		cmdMagnetHandshake()
+	case "magnet_info":
+		cmdMagnetInfo()
 	default:
 		//nolint:gosec // CLI tool, stderr output is not an XSS vector
 		fmt.Fprintln(os.Stderr, "Unknown command: "+command)

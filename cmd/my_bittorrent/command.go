@@ -195,6 +195,40 @@ func cmdMagnetHandshake() {
 	fmt.Printf("Peer Metadata Extension ID: %d\n", extensionID)
 }
 
+func cmdMagnetInfo() {
+	if len(os.Args) < 3 {
+		fmt.Fprintln(os.Stderr, "Usage: magnet_handshake <magnet_uri>")
+		os.Exit(1)
+	}
+	magnetLink := os.Args[2]
+	trackerURL, infoHash, err := magnet.Parse(magnetLink)
+	die(err)
+
+	infoHashBytes, err := hex.DecodeString(infoHash)
+	die(err)
+
+	metaInfo := &metainfo.MetaInfo{
+		TrackerURL: trackerURL,
+		InfoHash:   infoHashBytes,
+		Length:     999, // Placeholder length since we don't have the torrent file
+	}
+
+	peers, err := tracker.GetPeers(metaInfo)
+	die(err)
+
+	conn, _, err := peer.Dial(peers[0], metaInfo)
+	die(err)
+	defer func() {
+		_ = conn.Close()
+	}()
+
+	extensionID, err := peer.ExtensionHandshake(conn)
+	die(err)
+
+	err = peer.ExtensionMetadata(conn, extensionID)
+	die(err)
+}
+
 func loadTorrent(path string) (*metainfo.MetaInfo, error) {
 	//nolint:gosec // This is a command-line tool. We trust the user to provide a valid file path.
 	fileBytes, err := os.ReadFile(path)
