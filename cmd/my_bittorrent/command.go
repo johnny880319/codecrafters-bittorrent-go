@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/codecrafters-io/bittorrent-starter-go/internal/bencode"
+	"github.com/codecrafters-io/bittorrent-starter-go/internal/magnet"
 	"github.com/codecrafters-io/bittorrent-starter-go/internal/metainfo"
 	"github.com/codecrafters-io/bittorrent-starter-go/internal/peer"
 	"github.com/codecrafters-io/bittorrent-starter-go/internal/tracker"
@@ -144,6 +145,19 @@ func cmdDownload() {
 	//nolint:gosec // This is a command-line tool. We trust the user to provide a valid file path.
 	err = os.WriteFile(outputPath, pieces, 0o644)
 	die(err)
+}
+
+func cmdMagnetParse() {
+	if len(os.Args) < 3 {
+		fmt.Fprintln(os.Stderr, "Usage: magnet_parse <magnet_uri>")
+		os.Exit(1)
+	}
+	magnetLink := os.Args[2]
+	trackerURL, infoHash, err := magnet.Parse(magnetLink)
+	die(err)
+
+	fmt.Println("Tracker URL: " + trackerURL)
+	fmt.Printf("Info Hash: %x\n", infoHash)
 }
 
 func loadTorrent(path string) (*metainfo.MetaInfo, error) {
