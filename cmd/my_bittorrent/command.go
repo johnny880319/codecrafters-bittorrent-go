@@ -160,6 +160,32 @@ func cmdMagnetParse() {
 	fmt.Println("Info Hash: " + infoHash)
 }
 
+func cmdMagnetHandshake() {
+	if len(os.Args) < 3 {
+		fmt.Fprintln(os.Stderr, "Usage: magnet_handshake <magnet_uri>")
+		os.Exit(1)
+	}
+	magnetLink := os.Args[2]
+	trackerURL, infoHash, err := magnet.Parse(magnetLink)
+	die(err)
+
+	metaInfo := &metainfo.MetaInfo{
+		TrackerURL: trackerURL,
+		InfoHash:   []byte(infoHash),
+	}
+
+	peers, err := tracker.GetPeers(metaInfo)
+	die(err)
+
+	conn, peerID, err := peer.Dial(peers[0], metaInfo)
+	die(err)
+	defer func() {
+		_ = conn.Close()
+	}()
+
+	fmt.Printf("Peer ID: %x\n", peerID)
+}
+
 func loadTorrent(path string) (*metainfo.MetaInfo, error) {
 	//nolint:gosec // This is a command-line tool. We trust the user to provide a valid file path.
 	fileBytes, err := os.ReadFile(path)
