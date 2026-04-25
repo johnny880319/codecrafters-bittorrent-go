@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"strconv"
 
@@ -25,7 +26,8 @@ func cmdDecode() {
 	decoded, _, err := bencode.DecodeBencode(bencodedValue, 0)
 	die(err)
 
-	jsonOutput, _ := json.Marshal(decoded)
+	jsonOutput, err := json.Marshal(decoded)
+	die(err)
 
 	fmt.Println(string(jsonOutput))
 }
@@ -96,13 +98,7 @@ func cmdDownloadPiece() {
 	filePath := os.Args[4]
 	pieceIndex := os.Args[5]
 
-	metaInfo, err := loadTorrent(filePath)
-	die(err)
-
-	peers, err := tracker.GetPeers(metaInfo)
-	die(err)
-
-	conn, _, err := peer.Dial(peers[0], metaInfo)
+	conn, metaInfo, err := startConnection(filePath)
 	die(err)
 
 	defer func() {
@@ -110,22 +106,7 @@ func cmdDownloadPiece() {
 		die(err)
 	}()
 
-	err = peer.ReadBitfield(conn)
-	die(err)
-
-	err = peer.Setup(conn)
-	die(err)
-
-	// Download the specified piece from the peer
-	pieceIndexInt, err := strconv.Atoi(pieceIndex)
-	die(err)
-
-	piece, err := peer.DownloadPiece(conn, metaInfo, pieceIndexInt)
-	die(err)
-
-	// Save the downloaded piece to the output path
-	//nolint:gosec // This is a command-line tool. We trust the user to provide a valid file path.
-	err = os.WriteFile(outputPath, piece, 0o644)
+	err = downloadPiece(conn, metaInfo, outputPath, pieceIndex)
 	die(err)
 }
 
@@ -136,13 +117,7 @@ func cmdDownload() {
 	outputPath := os.Args[3]
 	fileName := os.Args[4]
 
-	metaInfo, err := loadTorrent(fileName)
-	die(err)
-
-	peers, err := tracker.GetPeers(metaInfo)
-	die(err)
-
-	conn, _, err := peer.Dial(peers[0], metaInfo)
+	conn, metaInfo, err := startConnection(fileName)
 	die(err)
 
 	defer func() {
@@ -150,23 +125,7 @@ func cmdDownload() {
 		die(err)
 	}()
 
-	err = peer.ReadBitfield(conn)
-	die(err)
-
-	err = peer.Setup(conn)
-	die(err)
-
-	var pieces []byte
-	for pieceIndexInt := 0; pieceIndexInt*metaInfo.InfoDict.PieceLength < metaInfo.InfoDict.Length; pieceIndexInt++ {
-		piece, err := peer.DownloadPiece(conn, metaInfo, pieceIndexInt)
-		die(err)
-
-		pieces = append(pieces, piece...)
-	}
-
-	// Save the downloaded piece to the output path
-	//nolint:gosec // This is a command-line tool. We trust the user to provide a valid file path.
-	err = os.WriteFile(outputPath, pieces, 0o644)
+	err = downloadFile(conn, metaInfo, outputPath)
 	die(err)
 }
 
@@ -189,36 +148,11 @@ func cmdMagnetHandshake() {
 	}
 	magnetLink := os.Args[2]
 
-	trackerURL, infoHash, err := magnet.Parse(magnetLink)
+	magnetInfo, err := magnetHandshake(magnetLink)
 	die(err)
 
-	infoHashBytes, err := hex.DecodeString(infoHash)
-	die(err)
-
-	metaInfo := &metainfo.MetaInfo{
-		TrackerURL: trackerURL,
-		InfoHash:   infoHashBytes,
-		InfoDict: metainfo.InfoDict{
-			Length: 999, // Placeholder length since we don't have the torrent file
-		},
-	}
-
-	peers, err := tracker.GetPeers(metaInfo)
-	die(err)
-
-	conn, peerID, err := peer.Dial(peers[0], metaInfo)
-	die(err)
-
-	defer func() {
-		err = conn.Close()
-		die(err)
-	}()
-
-	extensionID, err := peer.ExtensionHandshake(conn)
-	die(err)
-
-	fmt.Printf("Peer ID: %x\n", peerID)
-	fmt.Printf("Peer Metadata Extension ID: %d\n", extensionID)
+	fmt.Printf("Peer ID: %x\n", magnetInfo.PeerID)
+	fmt.Printf("Peer Metadata Extension ID: %d\n", magnetInfo.ExtensionID)
 }
 
 func cmdMagnetInfo() {
@@ -227,40 +161,17 @@ func cmdMagnetInfo() {
 	}
 	magnetLink := os.Args[2]
 
-	trackerURL, infoHash, err := magnet.Parse(magnetLink)
+	magnetInfo, err := magnetHandshake(magnetLink)
 	die(err)
 
-	infoHashBytes, err := hex.DecodeString(infoHash)
+	infoDict, err := peer.ExtensionMetadata(magnetInfo.Conn, magnetInfo.ExtensionID)
 	die(err)
 
-	metaInfo := &metainfo.MetaInfo{
-		TrackerURL: trackerURL,
-		InfoHash:   infoHashBytes,
-		InfoDict: metainfo.InfoDict{
-			Length: 999, // Placeholder length since we don't have the torrent file
-		},
-	}
+	magnetInfo.MetaInfo.InfoDict = *infoDict
 
-	peers, err := tracker.GetPeers(metaInfo)
-	die(err)
-
-	conn, _, err := peer.Dial(peers[0], metaInfo)
-	die(err)
-
-	defer func() {
-		err = conn.Close()
-		die(err)
-	}()
-
-	extensionID, err := peer.ExtensionHandshake(conn)
-	die(err)
-
-	infoDict, err := peer.ExtensionMetadata(conn, extensionID)
-	die(err)
-
-	fmt.Println("Tracker URL: " + trackerURL)
-	fmt.Println("Length: " + strconv.Itoa(infoDict.Length))
-	fmt.Println("Info Hash: " + fmt.Sprintf("%x", infoHashBytes))
+	fmt.Println("Tracker URL: " + magnetInfo.MetaInfo.TrackerURL)
+	fmt.Println("Length: " + strconv.Itoa(magnetInfo.MetaInfo.InfoDict.Length))
+	fmt.Println("Info Hash: " + fmt.Sprintf("%x", magnetInfo.MetaInfo.InfoHash))
 	fmt.Println("Piece Length: " + strconv.Itoa(infoDict.PieceLength))
 	fmt.Println("Piece Hashes:")
 	for i := 0; i < len(infoDict.PieceHashes); i++ {
@@ -276,52 +187,18 @@ func cmdMagnetDownloadPiece() {
 	magnetLink := os.Args[4]
 	pieceIndex := os.Args[5]
 
-	trackerURL, infoHash, err := magnet.Parse(magnetLink)
+	magnetInfo, err := magnetHandshake(magnetLink)
 	die(err)
 
-	infoHashBytes, err := hex.DecodeString(infoHash)
+	infoDict, err := peer.ExtensionMetadata(magnetInfo.Conn, magnetInfo.ExtensionID)
 	die(err)
 
-	metaInfo := &metainfo.MetaInfo{
-		TrackerURL: trackerURL,
-		InfoHash:   infoHashBytes,
-		InfoDict: metainfo.InfoDict{
-			Length: 999, // Placeholder length since we don't have the torrent file
-		},
-	}
+	magnetInfo.MetaInfo.InfoDict = *infoDict
 
-	peers, err := tracker.GetPeers(metaInfo)
+	err = peer.Setup(magnetInfo.Conn)
 	die(err)
 
-	conn, _, err := peer.Dial(peers[0], metaInfo)
-	die(err)
-
-	defer func() {
-		err = conn.Close()
-		die(err)
-	}()
-
-	extensionID, err := peer.ExtensionHandshake(conn)
-	die(err)
-
-	infoDict, err := peer.ExtensionMetadata(conn, extensionID)
-	die(err)
-
-	metaInfo.InfoDict = *infoDict
-
-	err = peer.Setup(conn)
-	die(err)
-
-	// Download the specified piece from the peer
-	pieceIndexInt, err := strconv.Atoi(pieceIndex)
-	die(err)
-
-	piece, err := peer.DownloadPiece(conn, metaInfo, pieceIndexInt)
-	die(err)
-
-	// Save the downloaded piece to the output path
-	//nolint:gosec // This is a command-line tool. We trust the user to provide a valid file path.
-	err = os.WriteFile(outputPath, piece, 0o644)
+	err = downloadPiece(magnetInfo.Conn, magnetInfo.MetaInfo, outputPath, pieceIndex)
 	die(err)
 }
 
@@ -332,53 +209,18 @@ func cmdMagnetDownload() {
 	outputPath := os.Args[3]
 	magnetLink := os.Args[4]
 
-	trackerURL, infoHash, err := magnet.Parse(magnetLink)
+	magnetInfo, err := magnetHandshake(magnetLink)
 	die(err)
 
-	infoHashBytes, err := hex.DecodeString(infoHash)
+	infoDict, err := peer.ExtensionMetadata(magnetInfo.Conn, magnetInfo.ExtensionID)
 	die(err)
 
-	metaInfo := &metainfo.MetaInfo{
-		TrackerURL: trackerURL,
-		InfoHash:   infoHashBytes,
-		InfoDict: metainfo.InfoDict{
-			Length: 999, // Placeholder length since we don't have the torrent file
-		},
-	}
+	magnetInfo.MetaInfo.InfoDict = *infoDict
 
-	peers, err := tracker.GetPeers(metaInfo)
+	err = peer.Setup(magnetInfo.Conn)
 	die(err)
 
-	conn, _, err := peer.Dial(peers[0], metaInfo)
-	die(err)
-
-	defer func() {
-		err = conn.Close()
-		die(err)
-	}()
-
-	extensionID, err := peer.ExtensionHandshake(conn)
-	die(err)
-
-	infoDict, err := peer.ExtensionMetadata(conn, extensionID)
-	die(err)
-
-	metaInfo.InfoDict = *infoDict
-
-	err = peer.Setup(conn)
-	die(err)
-
-	var pieces []byte
-	for pieceIndexInt := 0; pieceIndexInt*metaInfo.InfoDict.PieceLength < metaInfo.InfoDict.Length; pieceIndexInt++ {
-		piece, err := peer.DownloadPiece(conn, metaInfo, pieceIndexInt)
-		die(err)
-
-		pieces = append(pieces, piece...)
-	}
-
-	// Save the downloaded piece to the output path
-	//nolint:gosec // This is a command-line tool. We trust the user to provide a valid file path.
-	err = os.WriteFile(outputPath, pieces, 0o644)
+	err = downloadFile(magnetInfo.Conn, magnetInfo.MetaInfo, outputPath)
 	die(err)
 }
 
@@ -394,6 +236,125 @@ func loadTorrent(path string) (*metainfo.MetaInfo, error) {
 		return nil, err
 	}
 	return torrentInfo, nil
+}
+
+func startConnection(fileName string) (net.Conn, *metainfo.MetaInfo, error) {
+	metaInfo, err := loadTorrent(fileName)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	peers, err := tracker.GetPeers(metaInfo)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	conn, _, err := peer.Dial(peers[0], metaInfo)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = peer.ReadBitfield(conn)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = peer.Setup(conn)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return conn, metaInfo, nil
+}
+
+func downloadPiece(conn net.Conn, metaInfo *metainfo.MetaInfo, outputPath string, pieceIndex string) error {
+	// Download the specified piece from the peer
+	pieceIndexInt, err := strconv.Atoi(pieceIndex)
+	if err != nil {
+		return err
+	}
+
+	piece, err := peer.DownloadPiece(conn, metaInfo, pieceIndexInt)
+	if err != nil {
+		return err
+	}
+
+	// Save the downloaded piece to the output path
+	//nolint:gosec // This is a command-line tool. We trust the user to provide a valid file path.
+	err = os.WriteFile(outputPath, piece, 0o644)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func downloadFile(conn net.Conn, metaInfo *metainfo.MetaInfo, outputPath string) error {
+	var pieces []byte
+	for pieceIndexInt := 0; pieceIndexInt*metaInfo.InfoDict.PieceLength < metaInfo.InfoDict.Length; pieceIndexInt++ {
+		piece, err := peer.DownloadPiece(conn, metaInfo, pieceIndexInt)
+		if err != nil {
+			return err
+		}
+
+		pieces = append(pieces, piece...)
+	}
+
+	// Save the downloaded piece to the output path
+	//nolint:gosec // This is a command-line tool. We trust the user to provide a valid file path.
+	err := os.WriteFile(outputPath, pieces, 0o644)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+type magnetInfo struct {
+	Conn        net.Conn
+	MetaInfo    *metainfo.MetaInfo
+	PeerID      string
+	ExtensionID int
+}
+
+func magnetHandshake(magnetLink string) (*magnetInfo, error) {
+	trackerURL, infoHashString, err := magnet.Parse(magnetLink)
+	if err != nil {
+		return nil, err
+	}
+
+	infoHash, err := hex.DecodeString(infoHashString)
+	if err != nil {
+		return nil, err
+	}
+
+	metaInfo := &metainfo.MetaInfo{
+		TrackerURL: trackerURL,
+		InfoHash:   infoHash,
+		InfoDict: metainfo.InfoDict{
+			Length: 999, // Placeholder length since we don't have the torrent file
+		},
+	}
+
+	peers, err := tracker.GetPeers(metaInfo)
+	if err != nil {
+		return nil, err
+	}
+
+	conn, peerID, err := peer.Dial(peers[0], metaInfo)
+	if err != nil {
+		return nil, err
+	}
+
+	extensionID, err := peer.ExtensionHandshake(conn)
+	if err != nil {
+		return nil, err
+	}
+
+	return &magnetInfo{
+		Conn:        conn,
+		MetaInfo:    metaInfo,
+		PeerID:      peerID,
+		ExtensionID: extensionID,
+	}, nil
 }
 
 func die(err error) {
