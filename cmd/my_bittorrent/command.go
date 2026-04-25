@@ -298,7 +298,7 @@ func cmdMagnetDownloadPiece() {
 }
 
 func cmdMagnetDownload() {
-	if len(os.Args) < 6 || os.Args[2] != "-o" {
+	if len(os.Args) < 5 || os.Args[2] != "-o" {
 		fmt.Fprintln(os.Stderr, "Usage: magnet_download -o <output_path> <magnet_uri>")
 		os.Exit(1)
 	}
