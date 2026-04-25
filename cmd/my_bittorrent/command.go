@@ -3,8 +3,8 @@ package main
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"net"
 	"os"
 	"strconv"
 
@@ -21,19 +21,21 @@ func cmdDecode() {
 		os.Exit(1)
 	}
 	bencodedValue := os.Args[2]
+
 	decoded, _, err := bencode.DecodeBencode(bencodedValue, 0)
 	die(err)
 
 	jsonOutput, _ := json.Marshal(decoded)
+
 	fmt.Println(string(jsonOutput))
 }
 
 func cmdInfo() {
 	if len(os.Args) < 3 {
-		fmt.Fprintln(os.Stderr, "Usage: info <torrent_file>")
-		os.Exit(1)
+		die(errors.New("usage: info <torrent_file>"))
 	}
 	filePath := os.Args[2]
+
 	metaInfo, err := loadTorrent(filePath)
 	die(err)
 
@@ -49,18 +51,16 @@ func cmdInfo() {
 
 func cmdPeers() {
 	if len(os.Args) < 3 {
-		fmt.Fprintln(os.Stderr, "Usage: peers <torrent_file>")
-		os.Exit(1)
+		die(errors.New("usage: peers <torrent_file>"))
 	}
 	filePath := os.Args[2]
+
 	metaInfo, err := loadTorrent(filePath)
 	die(err)
 
 	peers, err := tracker.GetPeers(metaInfo)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	die(err)
+
 	fmt.Println("Peers:")
 	for _, p := range peers {
 		fmt.Println(p)
@@ -69,11 +69,11 @@ func cmdPeers() {
 
 func cmdHandshake() {
 	if len(os.Args) < 4 {
-		fmt.Fprintln(os.Stderr, "Usage: handshake <torrent_file> <peer_ip>")
-		os.Exit(1)
+		die(errors.New("usage: handshake <torrent_file> <peer_ip>"))
 	}
 	filePath := os.Args[2]
 	peerIP := os.Args[3]
+
 	metaInfo, err := loadTorrent(filePath)
 	die(err)
 
@@ -81,15 +81,16 @@ func cmdHandshake() {
 	die(err)
 
 	defer func() {
-		_ = conn.Close()
+		err = conn.Close()
+		die(err)
 	}()
+
 	fmt.Printf("Peer ID: %x\n", peerID)
 }
 
 func cmdDownloadPiece() {
 	if len(os.Args) < 6 || os.Args[2] != "-o" {
-		fmt.Fprintln(os.Stderr, "Usage: download_piece -o <output_path> <torrent_file> <piece_index>")
-		os.Exit(1)
+		die(errors.New("usage: download_piece -o <output_path> <torrent_file> <piece_index>"))
 	}
 	outputPath := os.Args[3]
 	filePath := os.Args[4]
@@ -98,12 +99,22 @@ func cmdDownloadPiece() {
 	metaInfo, err := loadTorrent(filePath)
 	die(err)
 
-	conn, err := connectPeer(metaInfo)
+	peers, err := tracker.GetPeers(metaInfo)
+	die(err)
+
+	conn, _, err := peer.Dial(peers[0], metaInfo)
 	die(err)
 
 	defer func() {
-		_ = conn.Close()
+		err = conn.Close()
+		die(err)
 	}()
+
+	err = peer.ReadBitfield(conn)
+	die(err)
+
+	err = peer.Setup(conn)
+	die(err)
 
 	// Download the specified piece from the peer
 	pieceIndexInt, err := strconv.Atoi(pieceIndex)
@@ -120,8 +131,7 @@ func cmdDownloadPiece() {
 
 func cmdDownload() {
 	if len(os.Args) < 5 || os.Args[2] != "-o" {
-		fmt.Fprintln(os.Stderr, "Usage: download -o <output_path> <torrent_file>")
-		os.Exit(1)
+		die(errors.New("usage: download -o <output_path> <torrent_file>"))
 	}
 	outputPath := os.Args[3]
 	fileName := os.Args[4]
@@ -129,16 +139,28 @@ func cmdDownload() {
 	metaInfo, err := loadTorrent(fileName)
 	die(err)
 
-	conn, err := connectPeer(metaInfo)
+	peers, err := tracker.GetPeers(metaInfo)
 	die(err)
+
+	conn, _, err := peer.Dial(peers[0], metaInfo)
+	die(err)
+
 	defer func() {
-		_ = conn.Close()
+		err = conn.Close()
+		die(err)
 	}()
+
+	err = peer.ReadBitfield(conn)
+	die(err)
+
+	err = peer.Setup(conn)
+	die(err)
 
 	var pieces []byte
 	for pieceIndexInt := 0; pieceIndexInt*metaInfo.InfoDict.PieceLength < metaInfo.InfoDict.Length; pieceIndexInt++ {
 		piece, err := peer.DownloadPiece(conn, metaInfo, pieceIndexInt)
 		die(err)
+
 		pieces = append(pieces, piece...)
 	}
 
@@ -150,10 +172,10 @@ func cmdDownload() {
 
 func cmdMagnetParse() {
 	if len(os.Args) < 3 {
-		fmt.Fprintln(os.Stderr, "Usage: magnet_parse <magnet_uri>")
-		os.Exit(1)
+		die(errors.New("usage: magnet_parse <magnet_uri>"))
 	}
 	magnetLink := os.Args[2]
+
 	trackerURL, infoHash, err := magnet.Parse(magnetLink)
 	die(err)
 
@@ -163,10 +185,10 @@ func cmdMagnetParse() {
 
 func cmdMagnetHandshake() {
 	if len(os.Args) < 3 {
-		fmt.Fprintln(os.Stderr, "Usage: magnet_handshake <magnet_uri>")
-		os.Exit(1)
+		die(errors.New("usage: magnet_handshake <magnet_uri>"))
 	}
 	magnetLink := os.Args[2]
+
 	trackerURL, infoHash, err := magnet.Parse(magnetLink)
 	die(err)
 
@@ -186,8 +208,10 @@ func cmdMagnetHandshake() {
 
 	conn, peerID, err := peer.Dial(peers[0], metaInfo)
 	die(err)
+
 	defer func() {
-		_ = conn.Close()
+		err = conn.Close()
+		die(err)
 	}()
 
 	extensionID, err := peer.ExtensionHandshake(conn)
@@ -199,10 +223,10 @@ func cmdMagnetHandshake() {
 
 func cmdMagnetInfo() {
 	if len(os.Args) < 3 {
-		fmt.Fprintln(os.Stderr, "Usage: magnet_handshake <magnet_uri>")
-		os.Exit(1)
+		die(errors.New("usage: magnet_handshake <magnet_uri>"))
 	}
 	magnetLink := os.Args[2]
+
 	trackerURL, infoHash, err := magnet.Parse(magnetLink)
 	die(err)
 
@@ -222,8 +246,10 @@ func cmdMagnetInfo() {
 
 	conn, _, err := peer.Dial(peers[0], metaInfo)
 	die(err)
+
 	defer func() {
-		_ = conn.Close()
+		err = conn.Close()
+		die(err)
 	}()
 
 	extensionID, err := peer.ExtensionHandshake(conn)
@@ -244,12 +270,12 @@ func cmdMagnetInfo() {
 
 func cmdMagnetDownloadPiece() {
 	if len(os.Args) < 6 || os.Args[2] != "-o" {
-		fmt.Fprintln(os.Stderr, "Usage: magnet_download_piece -o <output_path> <magnet_uri> <piece_index>")
-		os.Exit(1)
+		die(errors.New("usage: magnet_download_piece -o <output_path> <magnet_uri> <piece_index>"))
 	}
 	outputPath := os.Args[3]
 	magnetLink := os.Args[4]
 	pieceIndex := os.Args[5]
+
 	trackerURL, infoHash, err := magnet.Parse(magnetLink)
 	die(err)
 
@@ -269,8 +295,10 @@ func cmdMagnetDownloadPiece() {
 
 	conn, _, err := peer.Dial(peers[0], metaInfo)
 	die(err)
+
 	defer func() {
-		_ = conn.Close()
+		err = conn.Close()
+		die(err)
 	}()
 
 	extensionID, err := peer.ExtensionHandshake(conn)
@@ -299,11 +327,11 @@ func cmdMagnetDownloadPiece() {
 
 func cmdMagnetDownload() {
 	if len(os.Args) < 5 || os.Args[2] != "-o" {
-		fmt.Fprintln(os.Stderr, "Usage: magnet_download -o <output_path> <magnet_uri>")
-		os.Exit(1)
+		die(errors.New("usage: magnet_download -o <output_path> <magnet_uri>"))
 	}
 	outputPath := os.Args[3]
 	magnetLink := os.Args[4]
+
 	trackerURL, infoHash, err := magnet.Parse(magnetLink)
 	die(err)
 
@@ -323,8 +351,10 @@ func cmdMagnetDownload() {
 
 	conn, _, err := peer.Dial(peers[0], metaInfo)
 	die(err)
+
 	defer func() {
-		_ = conn.Close()
+		err = conn.Close()
+		die(err)
 	}()
 
 	extensionID, err := peer.ExtensionHandshake(conn)
@@ -342,6 +372,7 @@ func cmdMagnetDownload() {
 	for pieceIndexInt := 0; pieceIndexInt*metaInfo.InfoDict.PieceLength < metaInfo.InfoDict.Length; pieceIndexInt++ {
 		piece, err := peer.DownloadPiece(conn, metaInfo, pieceIndexInt)
 		die(err)
+
 		pieces = append(pieces, piece...)
 	}
 
@@ -363,30 +394,6 @@ func loadTorrent(path string) (*metainfo.MetaInfo, error) {
 		return nil, err
 	}
 	return torrentInfo, nil
-}
-
-func connectPeer(metaInfo *metainfo.MetaInfo) (net.Conn, error) {
-	peers, err := tracker.GetPeers(metaInfo)
-	if err != nil {
-		return nil, err
-	}
-
-	conn, _, err := peer.Dial(peers[0], metaInfo)
-	if err != nil {
-		return nil, err
-	}
-
-	err = peer.ReadBitfield(conn)
-	if err != nil {
-		return nil, err
-	}
-
-	err = peer.Setup(conn)
-	if err != nil {
-		return nil, err
-	}
-
-	return conn, nil
 }
 
 func die(err error) {
