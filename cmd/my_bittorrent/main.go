@@ -34,8 +34,8 @@ func main() {
 		cmdMagnetInfo()
 	case "magnet_download_piece":
 		cmdMagnetDownloadPiece()
-	// case "magnet_download":
-	// 	cmdMagnetDownload()
+	case "magnet_download":
+		cmdMagnetDownload()
 	default:
 		//nolint:gosec // CLI tool, stderr output is not an XSS vector
 		fmt.Fprintln(os.Stderr, "Unknown command: "+command)
