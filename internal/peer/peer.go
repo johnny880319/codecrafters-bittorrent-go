@@ -4,7 +4,6 @@ package peer
 import (
 	"bytes"
 	"context"
-	"os"
 
 	//nolint:gosec // BitTorrent uses SHA-1 for info hashes.
 	"crypto/sha1"
@@ -73,9 +72,8 @@ func Dial(peerIP string, metaInfo *metainfo.MetaInfo) (net.Conn, string, error) 
 	return conn, string(response[48:68]), nil
 }
 
-// Setup completes the post-handshake negotiation: reads the peer's bitfield,
-// sends Interested, and waits for Unchoke.
-func Setup(conn net.Conn) error {
+// ReadBitfield waits for a bitfield message from the peer indicating which pieces it has.
+func ReadBitfield(conn net.Conn) error {
 	// Wait for a bitfield message from the peer indicating which pieces it has
 	messageID, _, err := readMessage(conn)
 	if err != nil {
@@ -84,18 +82,23 @@ func Setup(conn net.Conn) error {
 	if messageID != msgBitfield {
 		return fmt.Errorf("expected bitfield message, got message ID %d", messageID)
 	}
+	return nil
+}
 
+// Setup completes the post-handshake negotiation: sends Interested, and waits for Unchoke.
+func Setup(conn net.Conn) error {
 	// Send an interested message
-	err = sendMessage(conn, msgInterested, nil)
+	err := sendMessage(conn, msgInterested, nil)
 	if err != nil {
 		return err
 	}
 
 	// Wait until you receive an unchoke message back
-	messageID, _, err = readMessage(conn)
+	messageID, _, err := readMessage(conn)
 	if err != nil {
 		return err
 	}
+
 	if messageID != msgUnchoke {
 		return fmt.Errorf("expected unchoke message, got message ID %d", messageID)
 	}
@@ -226,8 +229,6 @@ func ExtensionMetadata(conn net.Conn, extensionID int) (*metainfo.InfoDict, erro
 
 	receivedText := string(receivedPayload)
 
-	// print to stderr for debugging
-	fmt.Fprintln(os.Stderr, receivedText)
 	_, start, err := bencode.DecodeBencode(receivedText, 1)
 	if err != nil {
 		return nil, err
