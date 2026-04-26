@@ -180,7 +180,7 @@ func ExtensionHandshake(conn net.Conn) (int, error) {
 	payload := []byte{0} // extension message ID
 	handshakeDict := map[string]interface{}{
 		"m": map[string]interface{}{
-			"ut_metadata": localMetadataExtensionID,
+			"ut_metadata": int(localMetadataExtensionID),
 		},
 	}
 	encodedHandshake, err := bencode.EncodeBencode(handshakeDict)
