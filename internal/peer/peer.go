@@ -251,7 +251,12 @@ func ExtensionMetadata(conn net.Conn, extensionID int) (*metainfo.InfoDict, erro
 	if receivedID != msgExtension {
 		return nil, fmt.Errorf("expected extension message, got message ID %d", receivedID)
 	}
-	if len(receivedPayload) < 1 || receivedPayload[0] != localMetadataExtensionID {
+
+	if len(receivedPayload) < 1 {
+		return nil, fmt.Errorf("invalid metadata response: payload too short")
+	}
+
+	if receivedPayload[0] != localMetadataExtensionID {
 		return nil, fmt.Errorf(
 			"invalid metadata response: expected extension ID %d, got %d",
 			localMetadataExtensionID,
