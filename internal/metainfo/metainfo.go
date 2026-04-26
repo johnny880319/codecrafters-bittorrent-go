@@ -67,10 +67,16 @@ func ParseInfoDict(infoDict map[string]interface{}) (*InfoDict, error) {
 	if !ok {
 		return nil, fmt.Errorf("invalid torrent file: missing or invalid 'length' field")
 	}
+	if length < 0 {
+		return nil, fmt.Errorf("invalid torrent file: 'length' field cannot be negative")
+	}
 
 	pieceLength, ok := infoDict["piece length"].(int)
 	if !ok {
 		return nil, fmt.Errorf("invalid torrent file: missing or invalid 'piece length' field")
+	}
+	if pieceLength <= 0 {
+		return nil, fmt.Errorf("invalid torrent file: 'piece length' field must be positive")
 	}
 
 	var pieceHashes []string

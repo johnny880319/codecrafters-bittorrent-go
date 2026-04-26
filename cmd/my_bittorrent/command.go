@@ -258,7 +258,7 @@ func loadTorrent(path string) (*metainfo.MetaInfo, error) {
 	return torrentInfo, nil
 }
 
-func startConnection(fileName string) (conn net.Conn, metaInfo *metainfo.MetaInfo, err error) {
+func startConnection(fileName string) (peerConn net.Conn, metaInfo *metainfo.MetaInfo, err error) {
 	metaInfo, err = loadTorrent(fileName)
 	if err != nil {
 		return nil, nil, err
@@ -273,7 +273,7 @@ func startConnection(fileName string) (conn net.Conn, metaInfo *metainfo.MetaInf
 		return nil, nil, errors.New("no peers found")
 	}
 
-	conn, _, err = peer.Dial(peers[0], metaInfo)
+	conn, _, err := peer.Dial(peers[0], metaInfo)
 	if err != nil {
 		return nil, nil, err
 	}

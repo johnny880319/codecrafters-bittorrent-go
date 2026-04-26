@@ -142,6 +142,10 @@ func DownloadPiece(conn net.Conn, metaInfo *metainfo.MetaInfo, pieceIndex int) (
 		}
 
 		messageBegin := int(binary.BigEndian.Uint32(piecePayload[4:8]))
+		if messageBegin+blockLength > pieceLength {
+			return nil, fmt.Errorf("invalid piece payload: block exceeds piece length")
+		}
+
 		copy(piece[messageBegin:messageBegin+blockLength], piecePayload[8:8+blockLength])
 	}
 	// Verify that the SHA-1 hash of the piece matches the expected hash from the torrent file.
@@ -184,6 +188,9 @@ func ExtensionHandshake(conn net.Conn) (int, error) {
 	}
 	if receivedID != msgExtension {
 		return 0, fmt.Errorf("expected extension message, got message ID %d", receivedID)
+	}
+	if len(receivedPayload) < 1 {
+		return 0, fmt.Errorf("invalid extension handshake response: payload too short")
 	}
 
 	responseDict, _, err := bencode.DecodeBencode(string(receivedPayload), 1)
@@ -232,6 +239,9 @@ func ExtensionMetadata(conn net.Conn, extensionID int) (*metainfo.InfoDict, erro
 	}
 	if receivedID != msgExtension {
 		return nil, fmt.Errorf("expected extension message, got message ID %d", receivedID)
+	}
+	if len(receivedPayload) < 1 {
+		return nil, fmt.Errorf("invalid extension metadata response: payload too short")
 	}
 
 	receivedText := string(receivedPayload)
