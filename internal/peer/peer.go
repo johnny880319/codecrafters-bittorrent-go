@@ -141,7 +141,14 @@ func DownloadPiece(conn net.Conn, metaInfo *metainfo.MetaInfo, pieceIndex int) (
 			return nil, fmt.Errorf("invalid piece payload length: expected %d, got %d", 8+blockLength, len(piecePayload))
 		}
 
+		messageIndex := int(binary.BigEndian.Uint32(piecePayload[0:4]))
+		if messageIndex != pieceIndex {
+			return nil, fmt.Errorf("invalid piece payload: expected piece index %d, got %d", pieceIndex, messageIndex)
+		}
 		messageBegin := int(binary.BigEndian.Uint32(piecePayload[4:8]))
+		if messageBegin != blockBegin {
+			return nil, fmt.Errorf("invalid piece payload: expected block begin %d, got %d", blockBegin, messageBegin)
+		}
 		if messageBegin+blockLength > pieceLength {
 			return nil, fmt.Errorf("invalid piece payload: block exceeds piece length")
 		}

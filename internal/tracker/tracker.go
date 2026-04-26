@@ -49,6 +49,10 @@ func GetPeers(metaInfo *metainfo.MetaInfo) ([]string, error) {
 		_ = resp.Body.Close()
 	}()
 
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("tracker returned non-OK status: %s", resp.Status)
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
