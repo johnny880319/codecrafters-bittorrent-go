@@ -151,18 +151,28 @@ func cmdMagnetHandshake() {
 	magnetInfo, err := magnetHandshake(magnetLink)
 	die(err)
 
+	defer func() {
+		err = magnetInfo.Conn.Close()
+		die(err)
+	}()
+
 	fmt.Printf("Peer ID: %x\n", magnetInfo.PeerID)
 	fmt.Printf("Peer Metadata Extension ID: %d\n", magnetInfo.ExtensionID)
 }
 
 func cmdMagnetInfo() {
 	if len(os.Args) < 3 {
-		die(errors.New("usage: magnet_handshake <magnet_uri>"))
+		die(errors.New("usage: magnet_info <magnet_uri>"))
 	}
 	magnetLink := os.Args[2]
 
 	magnetInfo, err := magnetHandshake(magnetLink)
 	die(err)
+
+	defer func() {
+		err = magnetInfo.Conn.Close()
+		die(err)
+	}()
 
 	infoDict, err := peer.ExtensionMetadata(magnetInfo.Conn, magnetInfo.ExtensionID)
 	die(err)
@@ -190,6 +200,11 @@ func cmdMagnetDownloadPiece() {
 	magnetInfo, err := magnetHandshake(magnetLink)
 	die(err)
 
+	defer func() {
+		err = magnetInfo.Conn.Close()
+		die(err)
+	}()
+
 	infoDict, err := peer.ExtensionMetadata(magnetInfo.Conn, magnetInfo.ExtensionID)
 	die(err)
 
@@ -211,6 +226,11 @@ func cmdMagnetDownload() {
 
 	magnetInfo, err := magnetHandshake(magnetLink)
 	die(err)
+
+	defer func() {
+		err = magnetInfo.Conn.Close()
+		die(err)
+	}()
 
 	infoDict, err := peer.ExtensionMetadata(magnetInfo.Conn, magnetInfo.ExtensionID)
 	die(err)
@@ -247,6 +267,10 @@ func startConnection(fileName string) (net.Conn, *metainfo.MetaInfo, error) {
 	peers, err := tracker.GetPeers(metaInfo)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	if len(peers) == 0 {
+		return nil, nil, errors.New("no peers found")
 	}
 
 	conn, _, err := peer.Dial(peers[0], metaInfo)

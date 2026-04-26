@@ -30,13 +30,25 @@ func Parse(fileBytes []byte) (*MetaInfo, error) {
 		return nil, err
 	}
 
-	trackerURL := decoded.(map[string]interface{})["announce"].(string)
+	rootDict, ok := decoded.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid torrent file: root is not a dictionary")
+	}
+
+	trackerURL, ok := rootDict["announce"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid torrent file: missing or invalid 'announce' field")
+	}
 	infoHash, err := calculateInfoHash(fileBytes)
 	if err != nil {
 		return nil, err
 	}
 
-	infoDictRaw := decoded.(map[string]interface{})["info"].(map[string]interface{})
+	infoDictRaw, ok := rootDict["info"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid torrent file: missing or invalid 'info' field")
+	}
+
 	infoDict, err := ParseInfoDict(infoDictRaw)
 	if err != nil {
 		return nil, err
@@ -71,7 +83,7 @@ func ParseInfoDict(infoDict map[string]interface{}) (*InfoDict, error) {
 func calculateInfoHash(fileBytes []byte) ([]byte, error) {
 	var infoDictStart int
 
-	for i := 0; i < len(fileBytes); i++ {
+	for i := 0; i < len(fileBytes)-6; i++ {
 		if string(fileBytes[i:i+6]) == "4:info" {
 			infoDictStart = i + 6
 			break
