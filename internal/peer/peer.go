@@ -196,8 +196,8 @@ func ExtensionHandshake(conn net.Conn) (int, error) {
 	if receivedID != msgExtension {
 		return 0, fmt.Errorf("expected extension message, got message ID %d", receivedID)
 	}
-	if len(receivedPayload) < 1 {
-		return 0, fmt.Errorf("invalid extension handshake response: payload too short")
+	if len(receivedPayload) < 1 || receivedPayload[0] != 0 {
+		return 0, fmt.Errorf("invalid extension handshake response: expected extension message with ID 0")
 	}
 
 	responseDict, _, err := bencode.DecodeBencode(string(receivedPayload), 1)
@@ -247,8 +247,9 @@ func ExtensionMetadata(conn net.Conn, extensionID int) (*metainfo.InfoDict, erro
 	if receivedID != msgExtension {
 		return nil, fmt.Errorf("expected extension message, got message ID %d", receivedID)
 	}
-	if len(receivedPayload) < 1 {
-		return nil, fmt.Errorf("invalid extension metadata response: payload too short")
+	//nolint:gosec // This is a command-line tool. We trust the user to provide a valid extension ID.
+	if len(receivedPayload) < 1 || receivedPayload[0] != byte(extensionID) {
+		return nil, fmt.Errorf("invalid extension metadata response: expected extension message with ID %d", extensionID)
 	}
 
 	receivedText := string(receivedPayload)

@@ -92,6 +92,10 @@ func ParseInfoDict(infoDict map[string]interface{}) (*InfoDict, error) {
 		pieceHashes = append(pieceHashes, pieceList[i:i+20])
 	}
 
+	if len(pieceHashes) != (length+pieceLength-1)/pieceLength {
+		return nil, fmt.Errorf("invalid torrent file: number of piece hashes does not match expected count")
+	}
+
 	return &InfoDict{
 		Length:      length,
 		PieceLength: pieceLength,
