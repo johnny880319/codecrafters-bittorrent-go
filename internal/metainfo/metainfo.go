@@ -63,13 +63,23 @@ func Parse(fileBytes []byte) (*MetaInfo, error) {
 
 // ParseInfoDict extracts the length, piece length, and piece hashes from the info dictionary.
 func ParseInfoDict(infoDict map[string]interface{}) (*InfoDict, error) {
-	length := infoDict["length"].(int)
-	pieceLength := infoDict["piece length"].(int)
+	length, ok := infoDict["length"].(int)
+	if !ok {
+		return nil, fmt.Errorf("invalid torrent file: missing or invalid 'length' field")
+	}
+
+	pieceLength, ok := infoDict["piece length"].(int)
+	if !ok {
+		return nil, fmt.Errorf("invalid torrent file: missing or invalid 'piece length' field")
+	}
 
 	var pieceHashes []string
-	pieceList := infoDict["pieces"].(string)
+	pieceList, ok := infoDict["pieces"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid torrent file: missing or invalid 'pieces' field")
+	}
 
-	for i := 0; i < len(pieceList); i += 20 {
+	for i := 0; i+20 <= len(pieceList); i += 20 {
 		pieceHashes = append(pieceHashes, pieceList[i:i+20])
 	}
 
@@ -83,7 +93,7 @@ func ParseInfoDict(infoDict map[string]interface{}) (*InfoDict, error) {
 func calculateInfoHash(fileBytes []byte) ([]byte, error) {
 	var infoDictStart int
 
-	for i := 0; i < len(fileBytes)-6; i++ {
+	for i := 0; i+6 <= len(fileBytes); i++ {
 		if string(fileBytes[i:i+6]) == "4:info" {
 			infoDictStart = i + 6
 			break

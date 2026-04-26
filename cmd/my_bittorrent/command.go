@@ -278,6 +278,12 @@ func startConnection(fileName string) (net.Conn, *metainfo.MetaInfo, error) {
 		return nil, nil, err
 	}
 
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, conn.Close())
+		}
+	}()
+
 	err = peer.ReadBitfield(conn)
 	if err != nil {
 		return nil, nil, err
@@ -363,10 +369,20 @@ func magnetHandshake(magnetLink string) (*magnetInfo, error) {
 		return nil, err
 	}
 
+	if len(peers) == 0 {
+		return nil, errors.New("no peers found")
+	}
+
 	conn, peerID, err := peer.Dial(peers[0], metaInfo)
 	if err != nil {
 		return nil, err
 	}
+
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, conn.Close())
+		}
+	}()
 
 	extensionID, err := peer.ExtensionHandshake(conn)
 	if err != nil {

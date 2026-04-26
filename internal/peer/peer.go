@@ -239,7 +239,12 @@ func ExtensionMetadata(conn net.Conn, extensionID int) (*metainfo.InfoDict, erro
 		return nil, err
 	}
 
-	infoDict, err := metainfo.ParseInfoDict(infoDictRaw.(map[string]interface{}))
+	infoDictOk, ok := infoDictRaw.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid metadata response: expected a dictionary")
+	}
+
+	infoDict, err := metainfo.ParseInfoDict(infoDictOk)
 	if err != nil {
 		return nil, err
 	}
