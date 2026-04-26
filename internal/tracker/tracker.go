@@ -26,7 +26,7 @@ func GetPeers(metaInfo *metainfo.MetaInfo) ([]string, error) {
 	q.Set("port", "6881")
 	q.Set("uploaded", "0")
 	q.Set("downloaded", "0")
-	q.Set("left", fmt.Sprintf("%d", metaInfo.Length))
+	q.Set("left", fmt.Sprintf("%d", metaInfo.InfoDict.Length))
 	q.Set("compact", "1")
 	u.RawQuery = q.Encode()
 
@@ -49,6 +49,10 @@ func GetPeers(metaInfo *metainfo.MetaInfo) ([]string, error) {
 		_ = resp.Body.Close()
 	}()
 
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("tracker returned non-OK status: %s", resp.Status)
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
@@ -62,9 +66,17 @@ func parsePeers(body []byte) ([]string, error) {
 		return nil, err
 	}
 
-	peers, ok := content.(map[string]interface{})["peers"].(string)
+	contentDict, ok := content.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("tracker response is not a dictionary")
+	}
+
+	peers, ok := contentDict["peers"].(string)
 	if !ok {
 		return nil, fmt.Errorf("peers field is not a string")
+	}
+	if len(peers)%6 != 0 {
+		return nil, fmt.Errorf("invalid peers field length")
 	}
 
 	var peerList []string

@@ -11,9 +11,14 @@ import (
 
 // MetaInfo holds the information extracted from a torrent file.
 type MetaInfo struct {
-	TrackerURL  string
+	TrackerURL string
+	InfoHash   []byte
+	InfoDict   InfoDict
+}
+
+// InfoDict holds the length, piece length, and piece hashes extracted from the info dictionary of a torrent file.
+type InfoDict struct {
 	Length      int
-	InfoHash    []byte
 	PieceLength int
 	PieceHashes []string
 }
@@ -25,27 +30,74 @@ func Parse(fileBytes []byte) (*MetaInfo, error) {
 		return nil, err
 	}
 
-	infoDict := decoded.(map[string]interface{})["info"].(map[string]interface{})
+	rootDict, ok := decoded.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid torrent file: root is not a dictionary")
+	}
 
-	trackerURL := decoded.(map[string]interface{})["announce"].(string)
-	length := infoDict["length"].(int)
+	trackerURL, ok := rootDict["announce"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid torrent file: missing or invalid 'announce' field")
+	}
 	infoHash, err := calculateInfoHash(fileBytes)
 	if err != nil {
 		return nil, err
 	}
-	pieceLength := infoDict["piece length"].(int)
+
+	infoDictRaw, ok := rootDict["info"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid torrent file: missing or invalid 'info' field")
+	}
+
+	infoDict, err := ParseInfoDict(infoDictRaw)
+	if err != nil {
+		return nil, err
+	}
+
+	return &MetaInfo{
+		TrackerURL: trackerURL,
+		InfoHash:   infoHash,
+		InfoDict:   *infoDict,
+	}, nil
+}
+
+// ParseInfoDict extracts the length, piece length, and piece hashes from the info dictionary.
+func ParseInfoDict(infoDict map[string]interface{}) (*InfoDict, error) {
+	length, ok := infoDict["length"].(int)
+	if !ok {
+		return nil, fmt.Errorf("invalid torrent file: missing or invalid 'length' field")
+	}
+	if length < 0 {
+		return nil, fmt.Errorf("invalid torrent file: 'length' field cannot be negative")
+	}
+
+	pieceLength, ok := infoDict["piece length"].(int)
+	if !ok {
+		return nil, fmt.Errorf("invalid torrent file: missing or invalid 'piece length' field")
+	}
+	if pieceLength <= 0 {
+		return nil, fmt.Errorf("invalid torrent file: 'piece length' field must be positive")
+	}
 
 	var pieceHashes []string
-	pieceList := infoDict["pieces"].(string)
+	pieceList, ok := infoDict["pieces"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid torrent file: missing or invalid 'pieces' field")
+	}
+	if len(pieceList)%20 != 0 {
+		return nil, fmt.Errorf("invalid pieces field length")
+	}
 
 	for i := 0; i < len(pieceList); i += 20 {
 		pieceHashes = append(pieceHashes, pieceList[i:i+20])
 	}
 
-	return &MetaInfo{
-		TrackerURL:  trackerURL,
+	if len(pieceHashes) != (length+pieceLength-1)/pieceLength {
+		return nil, fmt.Errorf("invalid torrent file: number of piece hashes does not match expected count")
+	}
+
+	return &InfoDict{
 		Length:      length,
-		InfoHash:    infoHash,
 		PieceLength: pieceLength,
 		PieceHashes: pieceHashes,
 	}, nil
@@ -54,7 +106,7 @@ func Parse(fileBytes []byte) (*MetaInfo, error) {
 func calculateInfoHash(fileBytes []byte) ([]byte, error) {
 	var infoDictStart int
 
-	for i := 0; i < len(fileBytes); i++ {
+	for i := 0; i+6 <= len(fileBytes); i++ {
 		if string(fileBytes[i:i+6]) == "4:info" {
 			infoDictStart = i + 6
 			break
