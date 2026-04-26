@@ -258,8 +258,8 @@ func loadTorrent(path string) (*metainfo.MetaInfo, error) {
 	return torrentInfo, nil
 }
 
-func startConnection(fileName string) (net.Conn, *metainfo.MetaInfo, error) {
-	metaInfo, err := loadTorrent(fileName)
+func startConnection(fileName string) (conn net.Conn, metaInfo *metainfo.MetaInfo, err error) {
+	metaInfo, err = loadTorrent(fileName)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -273,7 +273,7 @@ func startConnection(fileName string) (net.Conn, *metainfo.MetaInfo, error) {
 		return nil, nil, errors.New("no peers found")
 	}
 
-	conn, _, err := peer.Dial(peers[0], metaInfo)
+	conn, _, err = peer.Dial(peers[0], metaInfo)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -345,7 +345,7 @@ type magnetInfo struct {
 	ExtensionID int
 }
 
-func magnetHandshake(magnetLink string) (*magnetInfo, error) {
+func magnetHandshake(magnetLink string) (mi *magnetInfo, err error) {
 	trackerURL, infoHashString, err := magnet.Parse(magnetLink)
 	if err != nil {
 		return nil, err

@@ -62,9 +62,17 @@ func parsePeers(body []byte) ([]string, error) {
 		return nil, err
 	}
 
-	peers, ok := content.(map[string]interface{})["peers"].(string)
+	contentDict, ok := content.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("tracker response is not a dictionary")
+	}
+
+	peers, ok := contentDict["peers"].(string)
 	if !ok {
 		return nil, fmt.Errorf("peers field is not a string")
+	}
+	if len(peers)%6 != 0 {
+		return nil, fmt.Errorf("invalid peers field length")
 	}
 
 	var peerList []string

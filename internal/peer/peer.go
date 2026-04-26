@@ -107,6 +107,10 @@ func Setup(conn net.Conn) error {
 
 // DownloadPiece breaks the piece into blocks of 16 kiB and download.
 func DownloadPiece(conn net.Conn, metaInfo *metainfo.MetaInfo, pieceIndex int) ([]byte, error) {
+	if pieceIndex < 0 || pieceIndex >= len(metaInfo.InfoDict.PieceHashes) {
+		return nil, fmt.Errorf("invalid piece index %d", pieceIndex)
+	}
+
 	pieceLength := min(metaInfo.InfoDict.PieceLength, metaInfo.InfoDict.Length-pieceIndex*metaInfo.InfoDict.PieceLength)
 	piece := make([]byte, pieceLength)
 	for blockIndex := 0; blockIndex*blockSize < pieceLength; blockIndex++ {
@@ -132,6 +136,9 @@ func DownloadPiece(conn net.Conn, metaInfo *metainfo.MetaInfo, pieceIndex int) (
 		}
 		if messageID != msgPiece {
 			return nil, fmt.Errorf("expected piece message, got message ID %d", messageID)
+		}
+		if len(piecePayload) != 8+blockLength {
+			return nil, fmt.Errorf("invalid piece payload length: expected %d, got %d", 8+blockLength, len(piecePayload))
 		}
 
 		messageBegin := int(binary.BigEndian.Uint32(piecePayload[4:8]))

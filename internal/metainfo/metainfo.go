@@ -78,8 +78,11 @@ func ParseInfoDict(infoDict map[string]interface{}) (*InfoDict, error) {
 	if !ok {
 		return nil, fmt.Errorf("invalid torrent file: missing or invalid 'pieces' field")
 	}
+	if len(pieceList)%20 != 0 {
+		return nil, fmt.Errorf("invalid pieces field length")
+	}
 
-	for i := 0; i+20 <= len(pieceList); i += 20 {
+	for i := 0; i < len(pieceList); i += 20 {
 		pieceHashes = append(pieceHashes, pieceList[i:i+20])
 	}
 
