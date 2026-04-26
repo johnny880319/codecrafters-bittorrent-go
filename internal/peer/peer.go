@@ -17,7 +17,11 @@ import (
 	"github.com/codecrafters-io/bittorrent-starter-go/internal/metainfo"
 )
 
-const blockSize = 16 * 1024 // 16 kiB
+const (
+	blockSize                     = 16 * 1024 // 16 kiB
+	localMetadataExtensionID byte = 17
+)
+
 const (
 	msgUnchoke    byte = 1
 	msgInterested byte = 2
@@ -176,7 +180,7 @@ func ExtensionHandshake(conn net.Conn) (int, error) {
 	payload := []byte{0} // extension message ID
 	handshakeDict := map[string]interface{}{
 		"m": map[string]interface{}{
-			"ut_metadata": 16,
+			"ut_metadata": localMetadataExtensionID,
 		},
 	}
 	encodedHandshake, err := bencode.EncodeBencode(handshakeDict)
@@ -247,9 +251,12 @@ func ExtensionMetadata(conn net.Conn, extensionID int) (*metainfo.InfoDict, erro
 	if receivedID != msgExtension {
 		return nil, fmt.Errorf("expected extension message, got message ID %d", receivedID)
 	}
-	//nolint:gosec // This is a command-line tool. We trust the user to provide a valid extension ID.
-	if len(receivedPayload) < 1 || receivedPayload[0] != byte(extensionID) {
-		return nil, fmt.Errorf("invalid extension metadata response: expected extension message with ID %d", extensionID)
+	if len(receivedPayload) < 1 || receivedPayload[0] != localMetadataExtensionID {
+		return nil, fmt.Errorf(
+			"invalid metadata response: expected extension ID %d, got %d",
+			localMetadataExtensionID,
+			receivedPayload[0],
+		)
 	}
 
 	receivedText := string(receivedPayload)
