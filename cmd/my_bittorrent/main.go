@@ -13,32 +13,35 @@ func main() {
 	}
 	command := os.Args[1]
 
+	var err error
 	switch command {
 	case "decode":
-		cmdDecode()
+		err = cmdDecode()
 	case "info":
-		cmdInfo()
+		err = cmdInfo()
 	case "peers":
-		cmdPeers()
+		err = cmdPeers()
 	case "handshake":
-		cmdHandshake()
+		err = cmdHandshake()
 	case "download_piece":
-		cmdDownloadPiece()
+		err = cmdDownloadPiece()
 	case "download":
-		cmdDownload()
+		err = cmdDownload()
 	case "magnet_parse":
-		cmdMagnetParse()
+		err = cmdMagnetParse()
 	case "magnet_handshake":
-		cmdMagnetHandshake()
+		err = cmdMagnetHandshake()
 	case "magnet_info":
-		cmdMagnetInfo()
+		err = cmdMagnetInfo()
 	case "magnet_download_piece":
-		cmdMagnetDownloadPiece()
+		err = cmdMagnetDownloadPiece()
 	case "magnet_download":
-		cmdMagnetDownload()
+		err = cmdMagnetDownload()
 	default:
-		//nolint:gosec // CLI tool, stderr output is not an XSS vector
-		fmt.Fprintln(os.Stderr, "Unknown command: "+command)
+		err = fmt.Errorf("unknown command: %s", command)
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
 		os.Exit(1)
 	}
 }

@@ -16,30 +16,36 @@ import (
 	"github.com/codecrafters-io/bittorrent-starter-go/internal/tracker"
 )
 
-func cmdDecode() {
+func cmdDecode() (err error) {
 	if len(os.Args) < 3 {
-		fmt.Fprintln(os.Stderr, "Usage: decode <bencoded_value>")
-		os.Exit(1)
+		return errors.New("usage: decode <bencoded_string>")
 	}
 	bencodedValue := os.Args[2]
 
 	decoded, _, err := bencode.DecodeBencode(bencodedValue, 0)
-	die(err)
+	if err != nil {
+		return err
+	}
 
 	jsonOutput, err := json.Marshal(decoded)
-	die(err)
+	if err != nil {
+		return err
+	}
 
 	fmt.Println(string(jsonOutput))
+	return nil
 }
 
-func cmdInfo() {
+func cmdInfo() (err error) {
 	if len(os.Args) < 3 {
-		die(errors.New("usage: info <torrent_file>"))
+		return errors.New("usage: info <torrent_file>")
 	}
 	filePath := os.Args[2]
 
 	metaInfo, err := loadTorrent(filePath)
-	die(err)
+	if err != nil {
+		return err
+	}
 
 	fmt.Println("Tracker URL: " + metaInfo.TrackerURL)
 	fmt.Println("Length: " + strconv.Itoa(metaInfo.InfoDict.Length))
@@ -49,133 +55,159 @@ func cmdInfo() {
 	for i := 0; i < len(metaInfo.InfoDict.PieceHashes); i++ {
 		fmt.Printf("%x\n", metaInfo.InfoDict.PieceHashes[i])
 	}
+	return nil
 }
 
-func cmdPeers() {
+func cmdPeers() (err error) {
 	if len(os.Args) < 3 {
-		die(errors.New("usage: peers <torrent_file>"))
+		return errors.New("usage: peers <torrent_file>")
 	}
 	filePath := os.Args[2]
 
 	metaInfo, err := loadTorrent(filePath)
-	die(err)
+	if err != nil {
+		return err
+	}
 
 	peers, err := tracker.GetPeers(metaInfo)
-	die(err)
+	if err != nil {
+		return err
+	}
 
 	fmt.Println("Peers:")
 	for _, p := range peers {
 		fmt.Println(p)
 	}
+	return nil
 }
 
-func cmdHandshake() {
+func cmdHandshake() (err error) {
 	if len(os.Args) < 4 {
-		die(errors.New("usage: handshake <torrent_file> <peer_ip>"))
+		return errors.New("usage: handshake <torrent_file> <peer_ip>")
 	}
 	filePath := os.Args[2]
 	peerIP := os.Args[3]
 
 	metaInfo, err := loadTorrent(filePath)
-	die(err)
+	if err != nil {
+		return err
+	}
 
 	conn, peerID, err := peer.Dial(peerIP, metaInfo)
-	die(err)
+	if err != nil {
+		return err
+	}
 
 	defer func() {
-		err = conn.Close()
-		die(err)
+		err = errors.Join(err, conn.Close())
 	}()
 
 	fmt.Printf("Peer ID: %x\n", peerID)
+	return nil
 }
 
-func cmdDownloadPiece() {
+func cmdDownloadPiece() (err error) {
 	if len(os.Args) < 6 || os.Args[2] != "-o" {
-		die(errors.New("usage: download_piece -o <output_path> <torrent_file> <piece_index>"))
+		return errors.New("usage: download_piece -o <output_path> <torrent_file> <piece_index>")
 	}
 	outputPath := os.Args[3]
 	filePath := os.Args[4]
 	pieceIndex := os.Args[5]
 
 	conn, metaInfo, err := startConnection(filePath)
-	die(err)
+	if err != nil {
+		return err
+	}
 
 	defer func() {
-		err = conn.Close()
-		die(err)
+		err = errors.Join(err, conn.Close())
 	}()
 
 	err = downloadPiece(conn, metaInfo, outputPath, pieceIndex)
-	die(err)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-func cmdDownload() {
+func cmdDownload() (err error) {
 	if len(os.Args) < 5 || os.Args[2] != "-o" {
-		die(errors.New("usage: download -o <output_path> <torrent_file>"))
+		return errors.New("usage: download -o <output_path> <torrent_file>")
 	}
 	outputPath := os.Args[3]
 	fileName := os.Args[4]
 
 	conn, metaInfo, err := startConnection(fileName)
-	die(err)
+	if err != nil {
+		return err
+	}
 
 	defer func() {
-		err = conn.Close()
-		die(err)
+		err = errors.Join(err, conn.Close())
 	}()
 
 	err = downloadFile(conn, metaInfo, outputPath)
-	die(err)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-func cmdMagnetParse() {
+func cmdMagnetParse() (err error) {
 	if len(os.Args) < 3 {
-		die(errors.New("usage: magnet_parse <magnet_uri>"))
+		return errors.New("usage: magnet_parse <magnet_uri>")
 	}
 	magnetLink := os.Args[2]
 
 	trackerURL, infoHash, err := magnet.Parse(magnetLink)
-	die(err)
+	if err != nil {
+		return err
+	}
 
 	fmt.Println("Tracker URL: " + trackerURL)
 	fmt.Println("Info Hash: " + infoHash)
+	return nil
 }
 
-func cmdMagnetHandshake() {
+func cmdMagnetHandshake() (err error) {
 	if len(os.Args) < 3 {
-		die(errors.New("usage: magnet_handshake <magnet_uri>"))
+		return errors.New("usage: magnet_handshake <magnet_uri>")
 	}
 	magnetLink := os.Args[2]
 
 	magnetInfo, err := magnetHandshake(magnetLink)
-	die(err)
+	if err != nil {
+		return err
+	}
 
 	defer func() {
-		err = magnetInfo.Conn.Close()
-		die(err)
+		err = errors.Join(err, magnetInfo.Conn.Close())
 	}()
 
 	fmt.Printf("Peer ID: %x\n", magnetInfo.PeerID)
 	fmt.Printf("Peer Metadata Extension ID: %d\n", magnetInfo.ExtensionID)
+	return nil
 }
 
-func cmdMagnetInfo() {
+func cmdMagnetInfo() (err error) {
 	if len(os.Args) < 3 {
-		die(errors.New("usage: magnet_info <magnet_uri>"))
+		return errors.New("usage: magnet_info <magnet_uri>")
 	}
 	magnetLink := os.Args[2]
 
 	magnetInfo, err := magnetHandshake(magnetLink)
-	die(err)
+	if err != nil {
+		return err
+	}
 
 	defer func() {
-		err = magnetInfo.Conn.Close()
-		die(err)
+		err = errors.Join(err, magnetInfo.Conn.Close())
 	}()
 
 	infoDict, err := peer.ExtensionMetadata(magnetInfo.Conn, magnetInfo.ExtensionID)
-	die(err)
+	if err != nil {
+		return err
+	}
 
 	magnetInfo.MetaInfo.InfoDict = *infoDict
 
@@ -187,61 +219,78 @@ func cmdMagnetInfo() {
 	for i := 0; i < len(infoDict.PieceHashes); i++ {
 		fmt.Printf("%x\n", infoDict.PieceHashes[i])
 	}
+	return nil
 }
 
-func cmdMagnetDownloadPiece() {
+func cmdMagnetDownloadPiece() (err error) {
 	if len(os.Args) < 6 || os.Args[2] != "-o" {
-		die(errors.New("usage: magnet_download_piece -o <output_path> <magnet_uri> <piece_index>"))
+		return errors.New("usage: magnet_download_piece -o <output_path> <magnet_uri> <piece_index>")
 	}
 	outputPath := os.Args[3]
 	magnetLink := os.Args[4]
 	pieceIndex := os.Args[5]
 
 	magnetInfo, err := magnetHandshake(magnetLink)
-	die(err)
+	if err != nil {
+		return err
+	}
 
 	defer func() {
-		err = magnetInfo.Conn.Close()
-		die(err)
+		err = errors.Join(err, magnetInfo.Conn.Close())
 	}()
 
 	infoDict, err := peer.ExtensionMetadata(magnetInfo.Conn, magnetInfo.ExtensionID)
-	die(err)
+	if err != nil {
+		return err
+	}
 
 	magnetInfo.MetaInfo.InfoDict = *infoDict
 
 	err = peer.Setup(magnetInfo.Conn)
-	die(err)
+	if err != nil {
+		return err
+	}
 
 	err = downloadPiece(magnetInfo.Conn, magnetInfo.MetaInfo, outputPath, pieceIndex)
-	die(err)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-func cmdMagnetDownload() {
+func cmdMagnetDownload() (err error) {
 	if len(os.Args) < 5 || os.Args[2] != "-o" {
-		die(errors.New("usage: magnet_download -o <output_path> <magnet_uri>"))
+		return errors.New("usage: magnet_download -o <output_path> <magnet_uri>")
 	}
 	outputPath := os.Args[3]
 	magnetLink := os.Args[4]
 
 	magnetInfo, err := magnetHandshake(magnetLink)
-	die(err)
+	if err != nil {
+		return err
+	}
 
 	defer func() {
-		err = magnetInfo.Conn.Close()
-		die(err)
+		err = errors.Join(err, magnetInfo.Conn.Close())
 	}()
 
 	infoDict, err := peer.ExtensionMetadata(magnetInfo.Conn, magnetInfo.ExtensionID)
-	die(err)
+	if err != nil {
+		return err
+	}
 
 	magnetInfo.MetaInfo.InfoDict = *infoDict
 
 	err = peer.Setup(magnetInfo.Conn)
-	die(err)
+	if err != nil {
+		return err
+	}
 
 	err = downloadFile(magnetInfo.Conn, magnetInfo.MetaInfo, outputPath)
-	die(err)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func loadTorrent(path string) (*metainfo.MetaInfo, error) {
@@ -395,11 +444,4 @@ func magnetHandshake(magnetLink string) (mi *magnetInfo, err error) {
 		PeerID:      peerID,
 		ExtensionID: extensionID,
 	}, nil
-}
-
-func die(err error) {
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
 }
